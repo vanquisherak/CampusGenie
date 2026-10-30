@@ -24,6 +24,7 @@ import {
   X,
   Youtube,
   BookOpen,
+  GraduationCap,
 } from "lucide-react";
 import {
   demoDiagnosticBank,
@@ -48,9 +49,11 @@ import {
   type SubjectBlueprint,
 } from "@/lib/blueprints-data";
 import { SubjectBlueprintModal } from "@/components/SubjectBlueprintModal";
+import { CuimsPortalHub } from "@/components/CuimsPortalHub";
 
 export const workspaces = [
   "Overview",
+  "CUIMS Student Hub",
   "Quiz Lab",
   "Study Planner",
   "Project Explorer",
@@ -148,6 +151,12 @@ export function AcademicWorkspaces({
             onAction={updateNotice}
           />
         )}
+        {workspace === "CUIMS Student Hub" && (
+          <CuimsPortalHub
+            onAskQuestion={onAskQuestion}
+            onAction={updateNotice}
+          />
+        )}
         {workspace === "Quiz Lab" && (
           <QuizLabPanel
             initialTopicId={activeSessionTopic}
@@ -229,6 +238,43 @@ function OverviewPanel({
 }) {
   return (
     <div className="space-y-6">
+      {/* CUIMS Live Portal Radar Banner */}
+      <div className="rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-500/[0.04] via-stone-50 to-amber-500/[0.06] p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-600 text-white shadow-xs">
+              <GraduationCap size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] uppercase font-bold text-red-600 tracking-wider">
+                  CUIMS Student Home · Live Feed
+                </span>
+                <span className="text-[10px] text-stone-400 font-mono">UID: 22BCS10482</span>
+              </div>
+              <h4 className="font-display text-lg text-slate-900 mt-0.5">
+                Attendance: 83.4% · Safe to bunk 2 lectures · Next: Cloud Architecture in B2-401
+              </h4>
+              <p className="text-xs text-stone-500 mt-0.5">
+                1 defaulter alert in DAA (68.8% - attend next 8 classes to clear). MST-2 Date Sheet announced.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                onAction("Opened CUIMS Student Hub.");
+                onNavigate("CUIMS Student Hub");
+              }}
+              className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 transition"
+            >
+              <span>Open CUIMS Hub</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-3">
         <div
           onClick={() => {

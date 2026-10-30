@@ -26,6 +26,7 @@ import {
   Sparkles,
   Target,
   X,
+  GraduationCap,
 } from "lucide-react";
 import {
   demoEvidence,
@@ -43,6 +44,7 @@ import type { LearningState } from "@/lib/curriculum/types";
 
 const navigation = [
   { label: "Overview", icon: Compass },
+  { label: "CUIMS Student Hub", icon: GraduationCap },
   { label: "Study Studio", icon: BookOpen },
   { label: "Quiz Lab", icon: CircleHelp },
   { label: "Project Radar", icon: FlaskConical },
@@ -133,14 +135,16 @@ export default function Home() {
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
 
-  const workspaceTarget =
+  const workspaceTarget: Workspace =
     activeNav === "Project Radar"
       ? "Project Explorer"
       : activeNav === "Study Studio"
       ? "Study Planner"
       : activeNav === "Bioscience Studio"
       ? "Bioscience Studio"
-      : activeNav;
+      : activeNav === "CUIMS Student Hub"
+      ? "CUIMS Student Hub"
+      : (activeNav as Workspace);
 
   function selectNavigation(label: string) {
     setActiveNav(label);
@@ -357,6 +361,33 @@ export default function Home() {
           <p className="mt-3.5 text-xs text-stone-500 flex items-center justify-between font-medium">
             <span>Inspect outcomes</span>
             <ChevronRight size={13} className="text-[var(--cobalt)]" />
+          </p>
+        </div>
+
+        {/* CUIMS Attendance Radar Card */}
+        <div
+          onClick={() => selectNavigation("CUIMS Student Hub")}
+          className="mt-3 cursor-pointer rounded-2xl bg-white/80 border border-stone-200/80 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-sm hover:border-red-300"
+          role="button"
+          tabIndex={0}
+          aria-label="View CUIMS student portal details"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-red-600 font-bold flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+              CUIMS Radar
+            </span>
+            <GraduationCap size={14} className="text-red-600" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="font-display text-2xl font-bold text-slate-900">83.4%</span>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              75% Safe
+            </span>
+          </div>
+          <p className="mt-2 text-[11px] text-stone-500 flex items-center justify-between">
+            <span>2 bunks available</span>
+            <ChevronRight size={12} className="text-stone-400" />
           </p>
         </div>
       </aside>
