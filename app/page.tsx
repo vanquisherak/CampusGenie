@@ -276,29 +276,33 @@ export default function Home() {
 
       {/* Sidebar Navigation */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-[276px] overflow-y-auto border-r border-[var(--line)] bg-[var(--paper)] px-7 py-7 transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 w-[280px] overflow-y-auto border-r border-[var(--line)] bg-[var(--paper)] px-6 py-7 transition-transform lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--ink)] text-[var(--paper)]">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-[var(--paper)] shadow-xs ring-1 ring-black/5">
               <Network size={18} />
             </div>
-            <span className="font-display text-xl">CampusGenie</span>
+            <div>
+              <span className="font-display text-xl font-medium tracking-tight text-[var(--ink)]">
+                CampusGenie
+              </span>
+            </div>
           </div>
           <button
             aria-label="Close navigation"
-            className="lg:hidden"
+            className="lg:hidden text-slate-500 hover:text-slate-900 p-1"
             onClick={() => setSidebarOpen(false)}
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="mt-14">
-          <p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-[var(--muted)]">
-            Your workspace
+        <div className="mt-12">
+          <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400 font-medium">
+            Academic Workspaces
           </p>
           <nav className="space-y-1">
             {navigation.map(({ label, icon: Icon }) => {
@@ -307,16 +311,16 @@ export default function Home() {
                 <button
                   key={label}
                   onClick={() => selectNavigation(label)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition ${
+                  className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm transition-all duration-200 ${
                     active
-                      ? "bg-[var(--ink)] text-white"
-                      : "text-[var(--muted)] hover:bg-[var(--paper-deep)] hover:text-[var(--ink)]"
+                      ? "bg-slate-900 text-white font-medium shadow-xs"
+                      : "text-slate-600 hover:bg-black/[0.035] hover:text-slate-900"
                   }`}
                 >
-                  <Icon size={17} strokeWidth={active ? 2.3 : 1.8} />
-                  <span>{label}</span>
+                  <Icon size={17} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-teal-400" : "text-slate-400"} />
+                  <span className="truncate">{label}</span>
                   {label === "Institutional Tools" && (
-                    <span className="ml-auto h-2 w-2 rounded-full bg-[var(--mint)]" />
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-teal-500" />
                   )}
                 </button>
               );
@@ -324,32 +328,34 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Term progress Card (Interactive Modal Trigger) */}
+        {/* Term Progress Card (Interactive Modal Trigger) */}
         <div
           onClick={() => setShowOutcomesModal(true)}
-          className="mt-10 cursor-pointer rounded-2xl bg-[var(--paper-deep)] p-4 transition hover:-translate-y-0.5 hover:ring-2 hover:ring-[var(--cobalt)]/30"
+          className="mt-10 cursor-pointer rounded-2xl bg-white/80 border border-stone-200/80 p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-sm hover:border-stone-300"
           role="button"
           tabIndex={0}
           aria-label="View term outcomes breakdown"
         >
           <div className="mb-3 flex items-center justify-between">
-            <span className="font-mono text-[10px] uppercase tracking-[.16em] text-[var(--muted)]">
-              Term progress
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500 font-medium">
+              Term Mastery
             </span>
-            <Target size={15} className="text-[var(--cobalt)]" />
+            <Target size={14} className="text-[var(--cobalt)]" />
           </div>
-          <div className="mb-2 flex items-end justify-between">
-            <span className="font-display text-3xl">{overallMastery}%</span>
-            <span className="text-xs text-[var(--muted)]">4 of 6 outcomes</span>
+          <div className="mb-2.5 flex items-end justify-between">
+            <span className="font-display text-3xl font-medium tracking-tight text-[var(--ink)]">
+              {overallMastery}%
+            </span>
+            <span className="text-xs text-stone-500">4 of 6 outcomes</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white">
+          <div className="h-1.5 overflow-hidden rounded-full bg-stone-100">
             <div
-              className="h-full rounded-full bg-[var(--cobalt)] transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--cobalt)] to-teal-500 transition-all duration-500"
               style={{ width: `${overallMastery}%` }}
             />
           </div>
-          <p className="mt-3 text-xs leading-5 text-[var(--muted)] flex items-center justify-between">
-            <span>Click to view outcomes</span>
+          <p className="mt-3.5 text-xs text-stone-500 flex items-center justify-between font-medium">
+            <span>Inspect outcomes</span>
             <ChevronRight size={13} className="text-[var(--cobalt)]" />
           </p>
         </div>
@@ -358,57 +364,62 @@ export default function Home() {
       {sidebarOpen && (
         <button
           aria-label="Close navigation overlay"
-          className="fixed inset-0 z-20 bg-[var(--ink)]/20 lg:hidden"
+          className="fixed inset-0 z-20 bg-slate-950/25 backdrop-blur-xs lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Main Content Area */}
-      <section className="min-w-0 flex-1 px-5 py-5 sm:px-8 lg:px-12 lg:py-9">
-        <header className="flex items-center justify-between gap-4">
+      <section className="min-w-0 flex-1 px-5 py-5 sm:px-8 lg:px-12 lg:py-8 relative">
+        {/* Subtle atmospheric ambient glow in hero */}
+        <div className="pointer-events-none absolute -top-16 right-10 w-[550px] h-[550px] bg-gradient-to-bl from-teal-500/[0.04] via-blue-500/[0.03] to-transparent rounded-full blur-3xl" />
+
+        <header className="sticky top-0 z-20 backdrop-blur-md bg-[var(--paper)]/85 border-b border-[var(--line)]/50 py-3.5 mb-8 -mx-5 px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12 flex items-center justify-between gap-4 transition-all">
           <button
             aria-label="Open navigation"
-            className="lg:hidden"
+            className="lg:hidden text-slate-700 hover:text-slate-900"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu size={22} />
           </button>
-          <div className="hidden items-center gap-2 text-sm text-[var(--muted)] sm:flex">
-            <span className="h-2 w-2 rounded-full bg-[var(--mint)]" />
-            Atlas workspace <ChevronRight size={14} /> {activeNav}
+          <div className="hidden items-center gap-2 text-xs text-stone-500 sm:flex font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span>Atlas workspace</span>
+            <span className="text-stone-300">/</span>
+            <span className="text-slate-900 font-semibold">{activeNav}</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {/* Live Voice Tutor Button */}
             <button
               onClick={() => setVoiceModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition shadow-xs"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition shadow-xs ring-1 ring-white/10"
               title="Launch Gemini Live Voice Tutor"
             >
-              <Mic size={14} className="text-teal-400 animate-pulse" />
+              <Mic size={13} className="text-teal-400" />
               <span className="hidden sm:inline">Voice Tutor</span>
-              <span className="text-[10px] text-teal-300 font-mono px-1 rounded bg-teal-950/60">Live</span>
+              <span className="text-[10px] text-teal-300 font-mono px-1 rounded bg-teal-950/80">Live</span>
             </button>
 
             {/* Firebase Auth & Profile State */}
             {user ? (
-              <div className="flex items-center gap-2 bg-white/70 border border-[var(--line)] rounded-full pl-2 pr-3 py-1">
+              <div className="flex items-center gap-2 bg-white/80 border border-stone-200/80 rounded-full pl-2 pr-3 py-1 shadow-xs">
                 {user.photoURL ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={user.photoURL}
                     alt={user.displayName || "User"}
-                    className="w-6 h-6 rounded-full object-cover"
+                    className="w-5 h-5 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-[var(--cobalt)] text-white text-[10px] font-bold grid place-items-center">
+                  <div className="w-5 h-5 rounded-full bg-[var(--cobalt)] text-white text-[10px] font-bold grid place-items-center">
                     {user.displayName?.[0] || user.email?.[0] || "U"}
                   </div>
                 )}
                 <div className="flex flex-col text-left">
-                  <span className="text-xs font-semibold max-w-[100px] truncate leading-tight">
+                  <span className="text-xs font-semibold max-w-[100px] truncate leading-tight text-slate-800">
                     {user.displayName || "Scholar"}
                   </span>
-                  <span className={`text-[9px] font-mono flex items-center gap-1 leading-tight ${dbConnected ? "text-emerald-600" : "text-amber-600"}`}>
+                  <span className={`text-[9px] font-mono flex items-center gap-1 leading-tight ${dbConnected ? "text-emerald-700 font-medium" : "text-amber-700"}`}>
                     <Database size={8} /> {dbConnected ? "Firestore Synced" : "Local Mode"}
                   </span>
                 </div>
@@ -417,14 +428,14 @@ export default function Home() {
                   title="Sign out of Firebase"
                   className="ml-1 text-slate-400 hover:text-slate-700 transition"
                 >
-                  <LogOut size={13} />
+                  <LogOut size={12} />
                 </button>
               </div>
             ) : (
               <button
                 onClick={handleGoogleSignIn}
                 disabled={authLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[var(--line)] text-slate-700 text-xs font-semibold hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-stone-200 text-slate-700 text-xs font-semibold hover:bg-stone-50 transition shadow-xs disabled:opacity-50"
               >
                 <LogIn size={13} className="text-[var(--cobalt)]" />
                 <span>{authLoading ? "Signing in..." : "Google Sign-In"}</span>
@@ -433,7 +444,7 @@ export default function Home() {
 
             <div
               onClick={() => setShowLearnerSignalModal(true)}
-              className="grid h-9 w-9 place-items-center rounded-full bg-[var(--coral)] font-display text-sm text-white cursor-pointer hover:opacity-90 shrink-0"
+              className="grid h-8 w-8 place-items-center rounded-full bg-[var(--coral)] font-display text-xs text-white cursor-pointer hover:opacity-90 shrink-0 ring-2 ring-white shadow-xs"
               title="Aria Sharma - Student Profile"
             >
               AS
@@ -441,43 +452,51 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-[1210px]">
+        <div className="mx-auto max-w-[1240px]">
           {/* Hero Section */}
-          <div className="reveal mt-14 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="reveal mt-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
-              <p className="mb-3 font-mono text-[10px] uppercase tracking-[.2em] text-[var(--cobalt)]">
-                Active Study Mission · 02
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--cobalt)] font-semibold">
+                Active Study Mission · Term 04
               </p>
-              <h1 className="max-w-[650px] font-display text-5xl leading-[.98] tracking-[-.03em] sm:text-6xl">
+              <h1
+                className="max-w-[680px] font-display text-5xl leading-[1.02] tracking-[-0.035em] sm:text-6xl text-[var(--ink)]"
+                style={{ textWrap: "balance" }}
+              >
                 Make the difficult
                 <br />
-                <em className="text-[var(--coral)]">part</em> visible.
+                <em className="font-normal italic text-[var(--coral)]">part</em> visible.
               </h1>
             </div>
-            <div className="max-w-[260px] text-sm leading-6 text-[var(--muted)]">
+            <div className="max-w-[280px] text-xs leading-5 text-stone-500">
               CampusGenie shapes your learning path by what you understand, grounded directly in verified curriculum evidence.
             </div>
           </div>
 
           {/* Study Mission & Learner Signal Cards */}
-          <div className="mt-12 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
+          <div className="mt-10 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
             {/* Current Study Mission Card */}
-            <section className="reveal delay-1 overflow-hidden rounded-2xl bg-[var(--ink)] p-6 text-white sm:p-8">
-              <div className="flex items-start justify-between">
+            <section className="reveal delay-1 overflow-hidden rounded-2xl bg-gradient-to-br from-[#101722] via-[#141f2d] to-[#0d141e] p-7 text-white sm:p-9 shadow-lg border border-white/[0.08] relative">
+              <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-teal-500/10 rounded-full blur-2xl" />
+
+              <div className="flex items-start justify-between relative z-10">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--mint)]">
-                    Current study mission
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--mint)] font-semibold">
+                    Current Study Mission
                   </p>
-                  <h2 className="mt-5 max-w-[450px] font-display text-3xl leading-tight sm:text-4xl">
+                  <h2 className="mt-4 max-w-[460px] font-display text-3xl leading-tight sm:text-4xl font-normal">
                     Untangle Bayesian inference before Friday.
                   </h2>
                 </div>
-                <Sparkles className="text-[var(--coral)]" size={22} />
+                <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                  <Sparkles className="text-[var(--coral)]" size={18} />
+                </div>
               </div>
-              <div className="mt-10 flex flex-col justify-between gap-6 border-t border-white/15 pt-5 sm:flex-row sm:items-end">
+
+              <div className="mt-8 flex flex-col justify-between gap-6 border-t border-white/10 pt-5 sm:flex-row sm:items-end relative z-10">
                 <div>
-                  <p className="text-xs text-white/50">Recommended because</p>
-                  <p className="mt-1 text-sm">
+                  <p className="text-xs text-white/50 font-medium">Recommended because</p>
+                  <p className="mt-1 text-sm text-white/90">
                     {bayesTopic?.misconception
                       ? "Active misconception: Prior probability vs Likelihood."
                       : "Diagnostic verified! Ready to compare with Regularization."}
@@ -489,9 +508,9 @@ export default function Home() {
                       "Run an adaptive diagnostic review on Bayesian inference: evaluate my active misconception regarding prior probability versus likelihood, show the calculation, and recommend concrete next steps."
                     );
                   }}
-                  className="flex items-center gap-2 self-start rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--mint)] shadow-xs"
+                  className="flex items-center gap-2 self-start rounded-full bg-white px-5 py-2.5 text-xs font-semibold text-slate-900 transition hover:bg-stone-100 shadow-sm"
                 >
-                  Start diagnostic & review <ArrowUpRight size={16} />
+                  Start diagnostic & review <ArrowUpRight size={15} />
                 </button>
               </div>
             </section>
@@ -499,56 +518,62 @@ export default function Home() {
             {/* Learner Signal Card (Interactive Modal Trigger) */}
             <section
               onClick={() => setShowLearnerSignalModal(true)}
-              className="reveal delay-2 cursor-pointer rounded-2xl border border-[var(--line)] bg-white/50 p-6 sm:p-8 transition hover:-translate-y-0.5 hover:shadow-sm"
+              className="reveal delay-2 cursor-pointer rounded-2xl border border-stone-200/80 bg-white/80 backdrop-blur-md p-7 sm:p-9 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-sm hover:border-stone-300"
               role="button"
               tabIndex={0}
               aria-label="View learner signals breakdown"
             >
               <div className="flex items-center justify-between">
-                <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">
-                  Learner signal
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">
+                  Learner Signal
                 </p>
-                <BrainCircuit size={19} className="text-[var(--cobalt)]" />
+                <div className="p-1.5 rounded-lg bg-blue-50 text-[var(--cobalt)]">
+                  <BrainCircuit size={17} />
+                </div>
               </div>
-              <div className="mt-7 flex items-end gap-3">
-                <span className="font-display text-6xl">{currentBayesMastery}</span>
-                <span className="mb-2 text-sm text-[var(--muted)]">
+              <div className="mt-6 flex items-end gap-3">
+                <span className="font-display text-6xl tracking-tight text-[var(--ink)]">
+                  {currentBayesMastery}
+                </span>
+                <span className="mb-2 text-xs text-stone-500 leading-tight">
                   / 100
                   <br />
                   Bayes mastery
                 </span>
               </div>
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--paper-deep)]">
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-stone-100">
                 <div
-                  className="h-full rounded-full bg-[var(--coral)] transition-all duration-500"
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--coral)] to-rose-600 transition-all duration-500"
                   style={{ width: `${currentBayesMastery}%` }}
                 />
               </div>
-              <div className="mt-5 flex items-start gap-2 text-xs leading-5 text-[var(--muted)]">
+              <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-stone-600">
                 <span
-                  className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                  className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                     bayesTopic?.misconception ? "bg-[var(--coral)]" : "bg-emerald-500"
                   }`}
                 />
-                <span>{misconceptionAlert}</span>
+                <span className="line-clamp-2">{misconceptionAlert}</span>
               </div>
             </section>
           </div>
 
           {/* Learning Graph & Ask CampusGenie Grid */}
-          <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_1.15fr]">
+          <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_1.15fr]">
             {/* The Learning Graph Column */}
             <section className="reveal delay-2">
               <div className="mb-4 flex items-end justify-between">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">
-                    The learning graph
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">
+                    The Learning Graph
                   </p>
-                  <h2 className="mt-2 font-display text-3xl">Curriculum Dependency Graph</h2>
+                  <h2 className="mt-1 font-display text-2xl sm:text-3xl font-medium tracking-tight text-[var(--ink)]">
+                    Curriculum Dependencies
+                  </h2>
                 </div>
                 <button
                   onClick={() => setShowGraphModal(true)}
-                  className="text-xs font-semibold text-[var(--cobalt)] hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-[var(--cobalt)] hover:underline flex items-center gap-1 transition"
                 >
                   View hierarchy <ArrowUpRight size={14} />
                 </button>
@@ -567,161 +592,178 @@ export default function Home() {
             </section>
 
             {/* Ask CampusGenie Column */}
-            <section id="ask-campusgenie" className="reveal delay-3 scroll-mt-8">
-              <div className="mb-6 flex items-end justify-between">
-                <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">
-                    Ask CampusGenie
-                  </p>
-                  <h2 className="mt-2 font-display text-3xl">What are you working through?</h2>
+            <section id="ask-campusgenie" className="reveal delay-3 scroll-mt-8 flex flex-col justify-between">
+              <div>
+                <div className="mb-5 flex items-end justify-between">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">
+                      Ask CampusGenie
+                    </p>
+                    <h2 className="mt-1 font-display text-2xl sm:text-3xl font-medium tracking-tight text-[var(--ink)]">
+                      What are you working through?
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-stone-500 flex items-center gap-1.5 font-medium">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Gemini 3.8 Flash
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-[var(--mint)]" /> Gemini live
-                  </span>
-                </div>
-              </div>
 
-              {/* Mode Selection Controls */}
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <button
-                  type="button"
-                  onClick={() => setUseSearchGrounding(!useSearchGrounding)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition flex items-center gap-1.5 ${
-                    useSearchGrounding
-                      ? "bg-teal-50 text-teal-800 border-teal-300 font-semibold shadow-xs"
-                      : "bg-white/80 text-slate-600 border-[var(--line)] hover:bg-white"
-                  }`}
+                {/* Mode Selection Controls */}
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setUseSearchGrounding(!useSearchGrounding)}
+                    className={`text-xs px-3 py-1.5 rounded-xl border transition-all duration-200 flex items-center gap-1.5 ${
+                      useSearchGrounding
+                        ? "bg-teal-50 text-teal-900 border-teal-300 font-semibold shadow-xs"
+                        : "bg-white/80 text-stone-600 border-stone-200 hover:bg-white hover:text-stone-900"
+                    }`}
+                  >
+                    <Globe size={13} className={useSearchGrounding ? "text-teal-600" : "text-stone-400"} />
+                    <span>Google Search Grounding (Live Citations)</span>
+                    {useSearchGrounding && <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVoiceModalOpen(true)}
+                    className="text-xs px-3 py-1.5 rounded-xl bg-white/80 hover:bg-white text-stone-700 transition flex items-center gap-1.5 border border-stone-200 shadow-xs"
+                  >
+                    <Mic size={13} className="text-teal-600" />
+                    <span>Voice Tutor Mode</span>
+                  </button>
+                </div>
+
+                {/* Studio Prompt Card */}
+                <form
+                  onSubmit={submitPrompt}
+                  className="relative rounded-2xl border border-stone-200/90 bg-white/80 backdrop-blur-md transition-all duration-200 focus-within:border-[var(--cobalt)] focus-within:ring-2 focus-within:ring-[var(--cobalt)]/15 shadow-xs"
                 >
-                  <Globe size={13} className={useSearchGrounding ? "text-teal-600" : "text-slate-400"} />
-                  <span>Google Search Grounding (Live Citations)</span>
-                  {useSearchGrounding && <span className="h-2 w-2 rounded-full bg-teal-500 animate-pulse" />}
-                </button>
+                  <textarea
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder={
+                      useSearchGrounding
+                        ? "Search recent academic research, syllabus updates, or peer-reviewed literature..."
+                        : "e.g. Show me why the prior matters in this Bayesian inference problem..."
+                    }
+                    className="h-32 w-full resize-none rounded-2xl bg-transparent p-4 sm:p-5 text-sm leading-6 outline-none transition placeholder:text-stone-400"
+                  />
+                  <div className="flex items-center justify-between border-t border-stone-100 px-4 py-2.5">
+                    <span className="font-mono text-[10px] text-stone-400 hidden sm:inline">
+                      Curriculum Evidence Grounded
+                    </span>
+                    <button
+                      aria-label="Send question"
+                      disabled={isAsking || !message.trim()}
+                      className="ml-auto grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-white transition hover:bg-[var(--cobalt)] disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
+                    >
+                      {isAsking ? (
+                        <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
+                      ) : (
+                        <ArrowUpRight size={15} />
+                      )}
+                    </button>
+                  </div>
+                </form>
 
-                <button
-                  type="button"
-                  onClick={() => setVoiceModalOpen(true)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200"
-                >
-                  <Mic size={13} className="text-teal-600" />
-                  <span>Voice Tutor Mode</span>
-                </button>
-              </div>
+                {isAsking && (
+                  <div className="mt-3 text-xs text-[var(--cobalt)] animate-pulse flex items-center gap-2 font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--cobalt)] animate-ping" />
+                    <span>
+                      {useSearchGrounding
+                        ? "Grounding query against live Google Search results with gemini-3.8-flash..."
+                        : "CampusGenie is mapping your question to curriculum evidence with Gemini..."}
+                    </span>
+                  </div>
+                )}
 
-              <form onSubmit={submitPrompt} className="relative">
-                <textarea
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  placeholder={
-                    useSearchGrounding
-                      ? "Search recent academic research, syllabus updates, or peer-reviewed literature..."
-                      : "e.g. Show me why the prior matters in this problem..."
-                  }
-                  className="h-32 w-full resize-none rounded-2xl border border-[var(--line)] bg-white/60 p-5 text-sm leading-6 outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--cobalt)] shadow-xs"
-                />
-                <button
-                  aria-label="Send question"
-                  disabled={isAsking}
-                  className="absolute bottom-4 right-4 grid h-9 w-9 place-items-center rounded-full bg-[var(--ink)] text-white transition hover:bg-[var(--cobalt)] disabled:cursor-wait disabled:opacity-50"
-                >
-                  {isAsking ? (
-                    <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
-                  ) : (
-                    <ArrowUpRight size={17} />
-                  )}
-                </button>
-              </form>
+                {sent && !isAsking && (
+                  <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700 font-medium">
+                    <Check size={14} /> Processed through {useSearchGrounding ? "grounded search pipeline" : "curriculum agent pipeline"}.
+                  </div>
+                )}
 
-              {isAsking && (
-                <div className="mt-3 text-xs text-[var(--cobalt)] animate-pulse flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[var(--cobalt)] animate-ping" />
-                  <span>
-                    {useSearchGrounding
-                      ? "Grounding query against live Google Search results with gemini-3.8-flash..."
-                      : "CampusGenie is mapping your question to curriculum evidence with Gemini..."}
-                  </span>
-                </div>
-              )}
+                {/* Assistant Output Container */}
+                {assistantReply && (
+                  <div className="mt-4 whitespace-pre-line rounded-2xl bg-white/95 backdrop-blur-md p-5 sm:p-6 text-sm leading-relaxed border border-stone-200/90 shadow-sm transition-all">
+                    <div className="prose prose-stone max-w-none text-slate-800 text-[13px] sm:text-sm">
+                      {assistantReply}
+                    </div>
 
-              {sent && !isAsking && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-[var(--cobalt)]">
-                  <Check size={14} /> Processed through {useSearchGrounding ? "grounded search pipeline" : "curriculum agent pipeline"}.
-                </div>
-              )}
-
-              {assistantReply && (
-                <div className="mt-4 whitespace-pre-line rounded-2xl bg-[var(--paper-deep)] p-5 text-sm leading-relaxed border border-[var(--line)] shadow-xs">
-                  <p>{assistantReply}</p>
-
-                  {/* Grounded Web Citations */}
-                  {groundedCitations.length > 0 && (
-                    <div className="mt-4 border-t border-[var(--line)] pt-3 space-y-2">
-                      <div className="text-[11px] font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                        <Globe size={13} className="text-teal-600" />
-                        Live Grounded Web Citations ({groundedCitations.length})
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {groundedCitations.map((citation, idx) => (
-                          <a
-                            key={idx}
-                            href={citation.uri}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2.5 py-1 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-md text-[11px] text-teal-800 flex items-center gap-1 transition"
-                          >
-                            <span className="truncate max-w-[200px]">{citation.title}</span>
-                            <ExternalLink size={10} className="shrink-0 text-slate-400" />
-                          </a>
-                        ))}
-                      </div>
-                      {searchQueries.length > 0 && (
-                        <div className="text-[10px] text-slate-500 font-mono pt-1">
-                          Google queries executed: {searchQueries.join(", ")}
+                    {/* Grounded Web Citations */}
+                    {groundedCitations.length > 0 && (
+                      <div className="mt-4 border-t border-stone-100 pt-3.5 space-y-2">
+                        <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                          <Globe size={13} className="text-teal-600" />
+                          Live Grounded Citations ({groundedCitations.length})
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div className="flex flex-wrap gap-2">
+                          {groundedCitations.map((citation, idx) => (
+                            <a
+                              key={idx}
+                              href={citation.uri}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 bg-stone-50 hover:bg-teal-50 border border-stone-200 hover:border-teal-300 rounded-lg text-[11px] text-teal-800 flex items-center gap-1 transition"
+                            >
+                              <span className="truncate max-w-[220px] font-medium">{citation.title}</span>
+                              <ExternalLink size={10} className="shrink-0 text-stone-400" />
+                            </a>
+                          ))}
+                        </div>
+                        {searchQueries.length > 0 && (
+                          <div className="text-[10px] text-stone-400 font-mono pt-1">
+                            Grounding queries: {searchQueries.join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {agentTrace.length > 0 && (
-                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-3">
-                      <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
-                        Agent trace
-                      </span>
-                      {agentTrace.map((agent) => (
-                        <span
-                          key={agent}
-                          className="rounded-md bg-white px-2 py-0.5 font-mono text-[10px] text-[var(--cobalt)] border border-[var(--line)]"
-                        >
-                          {agent}
+                    {agentTrace.length > 0 && (
+                      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-3">
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-stone-400 font-medium">
+                          Agent Trace
                         </span>
-                      ))}
-                      {assistantConfidence !== null && (
-                        <span className="ml-auto font-mono text-[10px] text-[var(--muted)]">
-                          confidence {Math.round(assistantConfidence * 100)}%
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+                        {agentTrace.map((agent) => (
+                          <span
+                            key={agent}
+                            className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-[10px] text-slate-700 border border-stone-200"
+                          >
+                            {agent}
+                          </span>
+                        ))}
+                        {assistantConfidence !== null && (
+                          <span className="ml-auto font-mono text-[10px] text-stone-400">
+                            confidence {Math.round(assistantConfidence * 100)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Starter Prompt Chips */}
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5 flex flex-wrap gap-2 pt-2">
                 <button
                   onClick={() => executePrompt("Explain prior probability with a visual analogy")}
-                  className="rounded-full border border-[var(--line)] bg-white/70 px-3.5 py-1.5 text-xs text-[var(--muted)] transition hover:border-[var(--ink)] hover:text-[var(--ink)]"
+                  className="rounded-xl border border-stone-200/90 bg-white/70 px-3.5 py-1.5 text-xs text-stone-600 transition-all hover:border-slate-900 hover:bg-white hover:text-slate-900"
                 >
                   Explain with an analogy
                 </button>
                 <button
                   onClick={() => executePrompt("Create a 5-question diagnostic for Bayesian inference")}
-                  className="rounded-full border border-[var(--line)] bg-white/70 px-3.5 py-1.5 text-xs text-[var(--muted)] transition hover:border-[var(--ink)] hover:text-[var(--ink)]"
+                  className="rounded-xl border border-stone-200/90 bg-white/70 px-3.5 py-1.5 text-xs text-stone-600 transition-all hover:border-slate-900 hover:bg-white hover:text-slate-900"
                 >
                   Make a diagnostic
                 </button>
                 <button
                   onClick={() => executePrompt("Why does L1 regularization create sparse weights while L2 shrinks them?")}
-                  className="rounded-full border border-[var(--line)] bg-white/70 px-3.5 py-1.5 text-xs text-[var(--muted)] transition hover:border-[var(--ink)] hover:text-[var(--ink)]"
+                  className="rounded-xl border border-stone-200/90 bg-white/70 px-3.5 py-1.5 text-xs text-stone-600 transition-all hover:border-slate-900 hover:bg-white hover:text-slate-900"
                 >
                   L1 vs L2 geometry
                 </button>
@@ -730,57 +772,63 @@ export default function Home() {
           </div>
 
           {/* Recent Activity & Evidence Trail */}
-          <div className="mt-14 grid gap-5 border-t border-[var(--line)] pt-8 md:grid-cols-[.85fr_1.15fr]">
+          <div className="mt-14 grid gap-6 border-t border-[var(--line)] pt-8 md:grid-cols-[0.85fr_1.15fr]">
             {/* Recent Activity List (Interactive) */}
             <section>
-              <div className="mb-5 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <MessageCircle size={17} className="text-[var(--cobalt)]" />
-                  <h2 className="font-display text-2xl">Recent activity</h2>
+                  <MessageCircle size={16} className="text-[var(--cobalt)]" />
+                  <h2 className="font-display text-2xl font-medium tracking-tight text-[var(--ink)]">
+                    Recent Activity
+                  </h2>
                 </div>
-                <span className="text-xs text-[var(--muted)]">{activityList.length} items logged</span>
+                <span className="text-xs text-stone-400 font-mono">{activityList.length} logged</span>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 rounded-2xl border border-stone-200/80 bg-white/60 p-2">
                 {activityList.slice(0, 5).map((item) => (
                   <div
                     key={item.id}
                     onClick={() => setSelectedActivity(item)}
-                    className="flex cursor-pointer items-center gap-3 border-b border-[var(--line)] py-3.5 transition hover:bg-white/40 px-2 rounded-lg"
+                    className="flex cursor-pointer items-center gap-3 py-2.5 px-3 transition-colors hover:bg-white rounded-xl"
                   >
-                    <span className={`h-2 w-2 rounded-full ${item.color}`} />
+                    <span className={`h-2 w-2 rounded-full ${item.color} shrink-0`} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-[var(--muted)]">{item.meta}</p>
+                      <p className="truncate text-xs font-semibold text-slate-800">{item.title}</p>
+                      <p className="text-[11px] text-stone-400">{item.meta}</p>
                     </div>
-                    <span className="font-mono text-[10px] text-[var(--muted)]">{item.status}</span>
+                    <span className="font-mono text-[10px] text-stone-500 shrink-0 font-medium">{item.status}</span>
                   </div>
                 ))}
               </div>
             </section>
 
             {/* Evidence Trail Cards (Interactive) */}
-            <section className="rounded-2xl bg-[var(--paper-deep)] p-6">
+            <section className="rounded-2xl bg-white/70 border border-stone-200/80 p-6 shadow-xs">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">
-                    Evidence trail
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">
+                    Evidence Trail
                   </p>
-                  <h2 className="mt-2 font-display text-2xl">Why this recommendation?</h2>
+                  <h2 className="mt-1 font-display text-2xl font-medium tracking-tight text-[var(--ink)]">
+                    Verified Curriculum Citations
+                  </h2>
                 </div>
-                <Library size={19} className="text-[var(--cobalt)]" />
+                <div className="p-1.5 rounded-lg bg-blue-50 text-[var(--cobalt)]">
+                  <Library size={16} />
+                </div>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 {demoEvidence.slice(0, 3).map((evidence) => (
                   <div
                     key={evidence.id}
                     onClick={() => setSelectedEvidence(evidence)}
-                    className="cursor-pointer rounded-xl bg-white/70 p-4 transition hover:-translate-y-0.5 hover:shadow-xs border border-[var(--line)]/50"
+                    className="cursor-pointer rounded-xl bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs border border-stone-200/70"
                   >
-                    <p className="text-xs font-semibold leading-4">{evidence.title}</p>
-                    <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-[var(--muted)]">
+                    <p className="text-xs font-semibold leading-snug text-slate-900">{evidence.title}</p>
+                    <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-stone-500">
                       {evidence.excerpt}
                     </p>
-                    <div className="mt-3 flex items-center gap-1 text-[10px] font-mono text-[var(--cobalt)]">
+                    <div className="mt-3 flex items-center gap-1 text-[10px] font-mono text-[var(--cobalt)] font-medium">
                       Inspect citation <ArrowRight size={10} />
                     </div>
                   </div>
@@ -790,25 +838,25 @@ export default function Home() {
           </div>
 
           {/* Institutional Connection Bar */}
-          <section className="mt-6 flex flex-col gap-4 rounded-2xl border border-[var(--line)] bg-white/45 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--cobalt)] text-white">
-                <Library size={18} />
+          <section className="mt-6 flex flex-col gap-4 rounded-2xl border border-stone-200/80 bg-white/75 backdrop-blur-md p-6 sm:flex-row sm:items-center sm:justify-between shadow-xs">
+            <div className="flex items-start gap-3.5">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-900 text-white shadow-xs">
+                <Library size={17} />
               </div>
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">
-                  Institutional connection
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">
+                  Institutional Integration
                 </p>
-                <h2 className="mt-1 font-display text-xl">CU-LMS / CUIMS context</h2>
-                <p className="mt-1 max-w-[560px] text-xs leading-5 text-[var(--muted)]">
-                  Course resources and identity context connect via Institutional SSO. CampusGenie never stores portal session keys in the application.
+                <h2 className="mt-0.5 font-display text-xl font-medium text-[var(--ink)]">CU-LMS / CUIMS Verified Context</h2>
+                <p className="mt-1 max-w-[580px] text-xs leading-5 text-stone-500">
+                  Course syllabi and identity context connect via Institutional SSO. CampusGenie never stores portal session keys in the application.
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 self-start sm:self-center">
+            <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
               <button
                 onClick={() => selectNavigation("Institutional Tools")}
-                className="flex items-center gap-2 rounded-full bg-[var(--ink)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--cobalt)]"
+                className="flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
               >
                 Open MCP Sandbox
               </button>
@@ -816,7 +864,7 @@ export default function Home() {
                 href="https://lms.cuchd.in/"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--ink)] hover:border-[var(--ink)]"
+                className="flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:border-slate-400 transition"
               >
                 Open CU-LMS <ArrowUpRight size={13} />
               </a>
@@ -842,48 +890,48 @@ export default function Home() {
 
       {/* 1. Term Outcomes Modal */}
       {showOutcomesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/30 p-4">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8 border border-stone-200/80">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div>
-                <span className="font-mono text-xs text-[var(--cobalt)]">Academic Term 4</span>
-                <h3 className="font-display text-3xl">Course Learning Outcomes</h3>
+                <span className="font-mono text-xs text-[var(--cobalt)] font-medium">Academic Term 4</span>
+                <h3 className="font-display text-3xl font-medium tracking-tight text-[var(--ink)]">Course Learning Outcomes</h3>
               </div>
               <button
                 onClick={() => setShowOutcomesModal(false)}
-                className="grid h-8 w-8 place-items-center rounded-full hover:bg-[var(--paper-deep)]"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:text-slate-800 hover:bg-stone-100 transition"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 space-y-3.5">
               {demoTermOutcomes.map((outcome) => (
                 <div
                   key={outcome.id}
-                  className="rounded-xl border border-[var(--line)] bg-white/70 p-4 transition hover:border-[var(--cobalt)]"
+                  className="rounded-2xl border border-stone-200/80 bg-stone-50/50 p-4 transition-all hover:bg-white hover:shadow-xs"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-mono text-[10px] text-[var(--muted)]">
+                      <span className="font-mono text-[10px] text-stone-500 font-medium">
                         {outcome.code} · {outcome.course} ({outcome.credits} credits)
                       </span>
-                      <h4 className="mt-1 font-semibold text-sm">{outcome.title}</h4>
+                      <h4 className="mt-1 font-semibold text-sm text-slate-900">{outcome.title}</h4>
                     </div>
                     <span
-                      className={`font-mono text-xs px-2.5 py-1 rounded-full ${
+                      className={`font-mono text-xs px-2.5 py-0.5 rounded-full font-medium ${
                         outcome.status === "mastered"
-                          ? "bg-[var(--mint)] text-emerald-950 font-semibold"
-                          : "bg-[var(--paper-deep)] text-[var(--coral)]"
+                          ? "bg-emerald-100 text-emerald-900"
+                          : "bg-stone-200/60 text-slate-700"
                       }`}
                     >
                       {outcome.mastery}%
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-[var(--muted)] leading-relaxed">
+                  <p className="mt-2 text-xs text-stone-600 leading-relaxed">
                     {outcome.description}
                   </p>
-                  <div className="mt-3 flex items-center gap-3 border-t border-[var(--line)] pt-2 text-xs">
+                  <div className="mt-3 flex items-center gap-3 border-t border-stone-200/60 pt-2.5 text-xs">
                     <button
                       onClick={() => {
                         setShowOutcomesModal(false);
@@ -893,13 +941,13 @@ export default function Home() {
                     >
                       Test outcome in Quiz Lab
                     </button>
-                    <span className="text-[var(--line)]">·</span>
+                    <span className="text-stone-300">·</span>
                     <button
                       onClick={() => {
                         setShowOutcomesModal(false);
                         executePrompt(`Explain the key principles of "${outcome.title}" in ${outcome.course}`);
                       }}
-                      className="text-[var(--muted)] hover:text-[var(--ink)]"
+                      className="text-stone-600 hover:text-slate-900 font-medium"
                     >
                       Ask CampusGenie
                     </button>
@@ -908,10 +956,10 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-6 flex justify-end border-t border-[var(--line)] pt-4">
+            <div className="mt-6 flex justify-end border-t border-stone-100 pt-4">
               <button
                 onClick={() => setShowOutcomesModal(false)}
-                className="rounded-full bg-[var(--ink)] px-5 py-2 text-xs font-semibold text-white hover:bg-[var(--cobalt)]"
+                className="rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
               >
                 Close
               </button>
@@ -922,40 +970,40 @@ export default function Home() {
 
       {/* 2. Curriculum Graph Visualizer Modal */}
       {showGraphModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/30 p-4">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8 border border-stone-200/80">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div>
-                <span className="font-mono text-xs text-[var(--cobalt)]">Curriculum Dependency Graph</span>
-                <h3 className="font-display text-3xl">Prerequisites & Progression</h3>
+                <span className="font-mono text-xs text-[var(--cobalt)] font-medium">Curriculum Hierarchy</span>
+                <h3 className="font-display text-3xl font-medium tracking-tight text-[var(--ink)]">Prerequisites & Progression</h3>
               </div>
               <button
                 onClick={() => setShowGraphModal(false)}
-                className="grid h-8 w-8 place-items-center rounded-full hover:bg-[var(--paper-deep)]"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:text-slate-800 hover:bg-stone-100 transition"
               >
                 <X size={18} />
               </button>
             </div>
 
             <div className="mt-6 space-y-4">
-              <p className="text-xs text-[var(--muted)] leading-relaxed">
+              <p className="text-xs text-stone-600 leading-relaxed">
                 CampusGenie sequences concepts strictly according to dependency theory: foundational axioms must reach minimum confidence before advanced regularization and systems optimization are recommended.
               </p>
 
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper-deep)] p-5 space-y-4">
+              <div className="rounded-2xl border border-stone-200/80 bg-stone-50/60 p-4 space-y-3">
                 {curriculumGraph.map((node, i) => (
                   <div
                     key={node.id}
-                    className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between border border-stone-200/60"
                   >
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs font-semibold text-[var(--cobalt)]">
                           0{i + 1}.
                         </span>
-                        <h4 className="font-semibold text-sm">{node.label}</h4>
+                        <h4 className="font-semibold text-sm text-slate-900">{node.label}</h4>
                       </div>
-                      <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      <p className="mt-1 text-[11px] text-stone-500">
                         {node.prerequisites.length > 0
                           ? `Prerequisites: ${node.prerequisites.join(", ")}`
                           : "Foundational Topic (No prerequisite required)"}
@@ -967,7 +1015,7 @@ export default function Home() {
                         setShowGraphModal(false);
                         executePrompt(`Provide a dependency walkthrough for ${node.label}`);
                       }}
-                      className="rounded-full border border-[var(--ink)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--ink)] hover:text-white"
+                      className="rounded-full border border-stone-300 px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-900 hover:text-white transition"
                     >
                       Inspect Node
                     </button>
@@ -976,10 +1024,10 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end border-t border-[var(--line)] pt-4">
+            <div className="mt-6 flex justify-end border-t border-stone-100 pt-4">
               <button
                 onClick={() => setShowGraphModal(false)}
-                className="rounded-full bg-[var(--ink)] px-5 py-2 text-xs font-semibold text-white hover:bg-[var(--cobalt)]"
+                className="rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
               >
                 Close Graph
               </button>
@@ -990,56 +1038,56 @@ export default function Home() {
 
       {/* 3. Learner Signal Diagnostics Drawer */}
       {showLearnerSignalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/30 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl sm:p-8 border border-stone-200/80">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div>
-                <span className="font-mono text-xs text-[var(--cobalt)]">Cognitive State Model</span>
-                <h3 className="font-display text-2xl">Learner Signal Profile</h3>
+                <span className="font-mono text-xs text-[var(--cobalt)] font-medium">Cognitive State Model</span>
+                <h3 className="font-display text-2xl font-medium tracking-tight text-[var(--ink)]">Learner Signal Profile</h3>
               </div>
               <button
                 onClick={() => setShowLearnerSignalModal(false)}
-                className="grid h-8 w-8 place-items-center rounded-full hover:bg-[var(--paper-deep)]"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:text-slate-800 hover:bg-stone-100 transition"
               >
                 <X size={18} />
               </button>
             </div>
 
             <div className="mt-6 space-y-4 text-xs leading-relaxed">
-              <div className="rounded-xl bg-[var(--paper-deep)] p-4">
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Student Identity</span>
-                <p className="mt-1 font-semibold text-sm">Aria Sharma (BSc Computer Science)</p>
-                <p className="text-[11px] text-[var(--muted)]">Learner ID: learner-aria-01 · Active in 3 courses</p>
+              <div className="rounded-2xl bg-stone-50 p-4 border border-stone-200/70">
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Student Identity</span>
+                <p className="mt-1 font-semibold text-sm text-slate-900">Aria Sharma (BSc Computer Science)</p>
+                <p className="text-[11px] text-stone-500">Learner ID: learner-aria-01 · Active in 3 courses</p>
               </div>
 
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Active Misconception Status</span>
-                <div className="mt-1 flex items-start gap-2 rounded-xl border border-[var(--coral)]/40 bg-[var(--coral)]/10 p-3 text-rose-950">
-                  <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--coral)]" />
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Active Misconception Status</span>
+                <div className="mt-1.5 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50/70 p-3.5 text-rose-950">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0 text-rose-600" />
                   <div>
-                    <p className="font-semibold">{misconceptionAlert}</p>
-                    <p className="mt-1 text-[11px] opacity-90">
+                    <p className="font-semibold text-rose-900">{misconceptionAlert}</p>
+                    <p className="mt-1 text-[11px] text-rose-800/90 leading-relaxed">
                       When evaluating Bayes theorem, students frequently substitute the likelihood P(D|H) directly for the prior P(H) before observing new diagnostic test findings.
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="border-t border-[var(--line)] pt-3">
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Actionable Next Step</span>
-                <p className="mt-1 font-semibold text-[var(--ink)]">
+              <div className="border-t border-stone-100 pt-3">
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Actionable Next Step</span>
+                <p className="mt-1 font-semibold text-slate-900">
                   Complete the 5-question Bayes diagnostic in Quiz Lab to clear the misconception flag and verify posterior calculation.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2 border-t border-[var(--line)] pt-4">
+            <div className="mt-6 flex justify-end gap-2 border-t border-stone-100 pt-4">
               <button
                 onClick={() => {
                   setShowLearnerSignalModal(false);
                   selectNavigation("Quiz Lab");
                 }}
-                className="rounded-full bg-[var(--ink)] px-5 py-2 text-xs font-semibold text-white hover:bg-[var(--cobalt)]"
+                className="rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
               >
                 Launch Diagnostic
               </button>
@@ -1050,18 +1098,18 @@ export default function Home() {
 
       {/* 4. Evidence Inspection Modal */}
       {selectedEvidence && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/30 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl sm:p-8 border border-stone-200/80">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div>
-                <span className="font-mono text-xs text-[var(--cobalt)]">
+                <span className="font-mono text-xs text-[var(--cobalt)] font-medium">
                   Authority Tier: {selectedEvidence.authority} · Version {selectedEvidence.version}
                 </span>
-                <h3 className="font-display text-2xl">{selectedEvidence.title}</h3>
+                <h3 className="font-display text-2xl font-medium tracking-tight text-[var(--ink)]">{selectedEvidence.title}</h3>
               </div>
               <button
                 onClick={() => setSelectedEvidence(null)}
-                className="grid h-8 w-8 place-items-center rounded-full hover:bg-[var(--paper-deep)]"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:text-slate-800 hover:bg-stone-100 transition"
               >
                 <X size={18} />
               </button>
@@ -1069,22 +1117,22 @@ export default function Home() {
 
             <div className="mt-6 space-y-4 text-xs">
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Source Origin</span>
-                <p className="mt-1 font-semibold text-sm text-[var(--ink)]">{selectedEvidence.source}</p>
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Source Origin</span>
+                <p className="mt-1 font-semibold text-sm text-slate-900">{selectedEvidence.source}</p>
               </div>
 
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Verified Excerpt</span>
-                <blockquote className="mt-1 rounded-xl bg-[var(--paper-deep)] p-4 text-xs italic leading-6 text-[var(--ink)] border-l-2 border-[var(--cobalt)]">
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Verified Excerpt</span>
+                <blockquote className="mt-1.5 rounded-2xl bg-stone-50 border border-stone-200/80 p-4 text-xs italic leading-relaxed text-slate-800">
                   &ldquo;{selectedEvidence.excerpt}&rdquo;
                 </blockquote>
               </div>
 
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Linked Topics</span>
-                <div className="mt-1 flex flex-wrap gap-1.5 font-mono text-[10px]">
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Linked Topics</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5 font-mono text-[10px]">
                   {selectedEvidence.topicIds.map((tid) => (
-                    <span key={tid} className="rounded-md bg-white border border-[var(--line)] px-2 py-0.5">
+                    <span key={tid} className="rounded-md bg-stone-100 border border-stone-200 px-2 py-0.5 text-slate-700">
                       {tid}
                     </span>
                   ))}
@@ -1092,14 +1140,14 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2 border-t border-[var(--line)] pt-4">
+            <div className="mt-6 flex justify-end gap-2 border-t border-stone-100 pt-4">
               <button
                 onClick={() => {
                   const ev = selectedEvidence;
                   setSelectedEvidence(null);
                   executePrompt(`Explain this verified curriculum citation from ${ev.source}: "${ev.excerpt}"`);
                 }}
-                className="rounded-full bg-[var(--cobalt)] px-5 py-2 text-xs font-semibold text-white hover:opacity-90"
+                className="rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
               >
                 Ask CampusGenie About Citation
               </button>
@@ -1110,31 +1158,34 @@ export default function Home() {
 
       {/* 5. Activity Detail Modal */}
       {selectedActivity && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-              <h3 className="font-display text-xl">Activity Receipt</h3>
-              <button onClick={() => setSelectedActivity(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-stone-200/80">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <h3 className="font-display text-xl font-medium tracking-tight text-[var(--ink)]">Activity Receipt</h3>
+              <button
+                onClick={() => setSelectedActivity(null)}
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:text-slate-800 hover:bg-stone-100 transition"
+              >
                 <X size={18} />
               </button>
             </div>
             <div className="mt-4 space-y-3 text-xs leading-relaxed">
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Title</span>
-                <p className="font-semibold text-sm">{selectedActivity.title}</p>
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Title</span>
+                <p className="font-semibold text-sm text-slate-900">{selectedActivity.title}</p>
               </div>
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Recorded Timestamp</span>
-                <p className="text-[var(--muted)]">{selectedActivity.meta}</p>
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Recorded Timestamp</span>
+                <p className="text-stone-500">{selectedActivity.meta}</p>
               </div>
               <div>
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Status / Score</span>
+                <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Status / Score</span>
                 <p className="font-mono font-semibold text-[var(--cobalt)]">{selectedActivity.status}</p>
               </div>
               {selectedActivity.details && (
                 <div>
-                  <span className="font-mono text-[10px] uppercase text-[var(--muted)]">Session Details</span>
-                  <p className="mt-1 rounded-xl bg-[var(--paper-deep)] p-3 text-[11px] leading-5">
+                  <span className="font-mono text-[10px] uppercase text-stone-500 font-medium">Session Details</span>
+                  <p className="mt-1 rounded-xl bg-stone-50 border border-stone-200/70 p-3 text-[11px] leading-5 text-slate-700">
                     {selectedActivity.details}
                   </p>
                 </div>
@@ -1143,7 +1194,7 @@ export default function Home() {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setSelectedActivity(null)}
-                className="rounded-full bg-[var(--ink)] px-5 py-2 text-xs font-semibold text-white hover:bg-[var(--cobalt)]"
+                className="rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
               >
                 Close Receipt
               </button>

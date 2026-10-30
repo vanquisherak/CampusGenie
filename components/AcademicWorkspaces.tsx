@@ -99,9 +99,9 @@ export function AcademicWorkspaces({
   }
 
   return (
-    <section id="workspaces" className="mt-14 scroll-mt-6">
-      <div className="flex items-center justify-between border-b border-[var(--line)] pb-1">
-        <div className="flex gap-1 overflow-x-auto">
+    <section id="workspaces" className="mt-14 scroll-mt-8">
+      <div className="flex items-center justify-between border-b border-stone-200/80 pb-2">
+        <div className="flex gap-1.5 overflow-x-auto p-1 bg-stone-100/70 rounded-2xl border border-stone-200/60">
           {workspaces.map((item) => {
             const active = workspace === item;
             return (
@@ -111,10 +111,10 @@ export function AcademicWorkspaces({
                   setWorkspace(item);
                   updateNotice(`Switched to ${item} workspace.`);
                 }}
-                className={`whitespace-nowrap shrink-0 border-b-2 px-4 py-3 text-xs font-semibold transition ${
+                className={`whitespace-nowrap shrink-0 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200 ${
                   active
-                    ? "border-[var(--cobalt)] text-[var(--cobalt)] font-bold"
-                    : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
+                    ? "bg-white text-slate-900 shadow-xs border border-stone-200/80 font-bold"
+                    : "text-stone-500 hover:text-slate-900 hover:bg-white/50"
                 }`}
               >
                 {item}
@@ -125,11 +125,14 @@ export function AcademicWorkspaces({
       </div>
 
       <div
-        className="my-4 flex items-center justify-between rounded-xl bg-[var(--paper-deep)] px-4 py-3 text-xs text-[var(--muted)]"
+        className="my-4 flex items-center justify-between rounded-2xl bg-white/70 border border-stone-200/70 px-4 py-3 text-xs text-stone-600 shadow-xs"
         aria-live="polite"
       >
-        <span className="truncate pr-4">{notice}</span>
-        <span className="font-mono text-[10px] text-[var(--muted)] shrink-0 hidden sm:inline">
+        <div className="flex items-center gap-2 truncate pr-4">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal-500 shrink-0" />
+          <span className="truncate">{notice}</span>
+        </div>
+        <span className="font-mono text-[10px] text-stone-400 shrink-0 hidden sm:inline">
           Learner: {currentLearner?.program ?? "BSc Computer Science"}
         </span>
       </div>
