@@ -1,7 +1,7 @@
 import type { Evidence } from "@/lib/rag/contracts";
 import type { LearningState } from "@/lib/curriculum/types";
 
-export type AssistantIntent = "explain" | "study-plan" | "quiz" | "project" | "institutional-resource";
+export type AssistantIntent = "explain" | "study-plan" | "quiz" | "project" | "institutional-resource" | "remediate";
 
 export type AssistantRequest = {
   message: string;

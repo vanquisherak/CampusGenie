@@ -1,0 +1,10 @@
+{
+  "name": "CampusGenie",
+  "description": "A curriculum-aware academic agent for focused learning.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

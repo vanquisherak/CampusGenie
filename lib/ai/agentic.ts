@@ -2,23 +2,24 @@ import { demoEvidence } from "@/lib/demo-data";
 import { GoogleGenAI } from "@google/genai";
 import { planAcademicRequest } from "@/lib/orchestrator/plan";
 import { prerequisiteIds } from "@/lib/graph/curriculum";
-import type { AssistantResponse } from "@/lib/ai/contracts";
+import type { AssistantIntent, AssistantResponse } from "@/lib/ai/contracts";
 import type { LearningState } from "@/lib/curriculum/types";
 
 type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
-export async function runAgenticAssistant(message: string, learner: LearningState): Promise<AssistantResponse> {
+export async function runAgenticAssistant(message: string, learner: LearningState, overrideIntent?: AssistantIntent): Promise<AssistantResponse> {
   const plan = planAcademicRequest(message, learner);
+  const intent = overrideIntent ?? plan.intent;
   const evidence = demoEvidence.filter((item) => item.topicIds.some((topicId) => plan.topicIds.includes(topicId) || topicId === "stats-bayes"));
   const topicContext = [...plan.topicIds, ...prerequisiteIds(plan.topicIds)];
-  const modelResult = await generateWithConfiguredModel(message, learner, plan.intent, evidence);
-  const answer = verifyAnswer(modelResult.answer ?? fallbackAnswer(plan.intent), evidence);
+  const modelResult = await generateWithConfiguredModel(message, learner, intent, evidence);
+  const answer = verifyAnswer(modelResult.answer ?? fallbackAnswer(intent), evidence);
 
   return {
     answer,
-    intent: plan.intent,
+    intent,
     confidence: modelResult.answer ? 0.93 : 0.86,
     curriculumTopics: topicContext,
     evidence,
@@ -31,7 +32,7 @@ export async function runAgenticAssistant(message: string, learner: LearningStat
 
 async function generateWithConfiguredModel(message: string, learner: LearningState, intent: string, evidence: typeof demoEvidence): Promise<{ answer: string | null; message?: string }> {
   const geminiKey = process.env.GEMINI_API_KEY;
-  const geminiModel = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+  const geminiModel = process.env.GEMINI_MODEL || "gemini-flash-latest";
   if (geminiKey) return generateWithGemini(geminiKey, geminiModel, message, learner, intent, evidence);
 
   const apiKey = process.env.AI_API_KEY;
@@ -74,25 +75,53 @@ function fallbackAnswer(intent: string): string {
   return "A prior is your starting belief before seeing new evidence. The likelihood describes how compatible the observed evidence is with a hypothesis. CampusGenie will use your next diagnostic answers to choose the next example.";
 }
 
-async function generateWithGemini(apiKey: string, model: string, message: string, learner: LearningState, intent: string, evidence: typeof demoEvidence): Promise<{ answer: string | null; message?: string }> {
+async function generateWithGemini(apiKey: string, primaryModel: string, message: string, learner: LearningState, intent: string, evidence: typeof demoEvidence): Promise<{ answer: string | null; message?: string }> {
   try {
-    const client = new GoogleGenAI({ apiKey });
-    const interaction = await Promise.race([
-      client.interactions.create({
-        model,
-        input: JSON.stringify({
-          request: message,
-          intent,
-          learnerTopics: learner.topics,
-          curriculumEvidence: evidence,
-        }),
-        system_instruction: "You are CampusGenie, a curriculum-aware academic agent. Use only the supplied curriculum evidence. Personalize the response to the learner topics, explain clearly, and end with one concrete next learning action. Never invent institutional facts or claim an action was completed.",
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Gemini request timed out after 15 seconds")), 15000)),
-    ]);
-    const answer = interaction.output_text?.trim() || null;
-    return answer ? { answer } : { answer: null, message: "Gemini returned no assistant text; using the local learning fallback." };
-  } catch {
-    return { answer: null, message: "Gemini request failed or timed out; check GEMINI_API_KEY, GEMINI_MODEL, and API access." };
+    const client = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+
+    const modelsToTry = Array.from(new Set([primaryModel, "gemini-3.1-flash-lite", "gemini-3.8-flash"]));
+    let lastError: string | null = null;
+
+    for (const model of modelsToTry) {
+      try {
+        const response = await Promise.race([
+          client.models.generateContent({
+            model,
+            contents: JSON.stringify({
+              request: message,
+              intent,
+              learnerTopics: learner.topics,
+              curriculumEvidence: evidence,
+            }),
+            config: {
+              systemInstruction: "You are CampusGenie, a curriculum-aware academic agent. Use only the supplied curriculum evidence. Personalize the response to the learner topics, explain clearly, and end with one concrete next learning action. Never invent institutional facts or claim an action was completed.",
+            },
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Gemini request timed out after 12 seconds")), 12000)),
+        ]);
+        const answer = response.text?.trim() || null;
+        if (answer) return { answer };
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
+        // Continue to fallback model on transient 503/429/overload errors
+      }
+    }
+
+    return {
+      answer: null,
+      message: lastError
+        ? `Gemini API reported: ${lastError}. You can verify your key in Settings > Secrets.`
+        : "Gemini returned no assistant text; using the local learning fallback.",
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { answer: null, message: `Gemini request failed: ${errorMsg}. You can verify your key in Settings > Secrets.` };
   }
 }

@@ -4,16 +4,16 @@ import type { Evidence } from "@/lib/rag/contracts";
 type AgentKind = "curriculum" | "retrieval" | "verification" | "mastery" | "quiz" | "remediation" | "project";
 
 export const agentRegistry: Record<AgentKind, AcademicAgent> = {
-  curriculum: createAgent("curriculum-agent", "Maps requests to course outcomes and prerequisites"),
-  retrieval: createAgent("retrieval-agent", "Finds authoritative curriculum evidence"),
-  verification: createAgent("verification-agent", "Checks citations, alignment, and policy"),
-  mastery: createAgent("mastery-agent", "Reads and updates learner mastery evidence"),
-  quiz: createAgent("quiz-agent", "Creates outcome-aligned diagnostics and practice"),
-  remediation: createAgent("remediation-agent", "Targets misconceptions with the next smallest lesson"),
-  project: createAgent("project-agent", "Matches projects to skills, interests, and resources"),
+  curriculum: createAgent("curriculum-agent"),
+  retrieval: createAgent("retrieval-agent"),
+  verification: createAgent("verification-agent"),
+  mastery: createAgent("mastery-agent"),
+  quiz: createAgent("quiz-agent"),
+  remediation: createAgent("remediation-agent"),
+  project: createAgent("project-agent"),
 };
 
-function createAgent(name: string, description: string): AcademicAgent {
+function createAgent(name: string): AcademicAgent {
   return {
     name,
     supports: () => true,
