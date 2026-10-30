@@ -198,6 +198,13 @@ export default function Home() {
     setGroundedCitations([]);
     setSearchQueries([]);
 
+    // Automatically redirect/scroll to Ask CampusGenie where results are displayed
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("ask-campusgenie")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+
     if (useSearchGrounding) {
       void fetch("/api/grounded-search", {
         method: "POST",
@@ -477,10 +484,14 @@ export default function Home() {
                   </p>
                 </div>
                 <button
-                  onClick={() => selectNavigation("Quiz Lab")}
-                  className="flex items-center gap-2 self-start rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--mint)]"
+                  onClick={() => {
+                    executePrompt(
+                      "Run an adaptive diagnostic review on Bayesian inference: evaluate my active misconception regarding prior probability versus likelihood, show the calculation, and recommend concrete next steps."
+                    );
+                  }}
+                  className="flex items-center gap-2 self-start rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--mint)] shadow-xs"
                 >
-                  Start diagnostic <ArrowUpRight size={16} />
+                  Start diagnostic & review <ArrowUpRight size={16} />
                 </button>
               </div>
             </section>
@@ -556,7 +567,7 @@ export default function Home() {
             </section>
 
             {/* Ask CampusGenie Column */}
-            <section className="reveal delay-3">
+            <section id="ask-campusgenie" className="reveal delay-3 scroll-mt-8">
               <div className="mb-6 flex items-end justify-between">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">

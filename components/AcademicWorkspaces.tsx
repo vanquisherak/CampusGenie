@@ -19,8 +19,11 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Target,
   Unlock,
   X,
+  Youtube,
+  BookOpen,
 } from "lucide-react";
 import {
   demoDiagnosticBank,
@@ -37,7 +40,14 @@ import type { UserRole } from "@/lib/security/contracts";
 import type { LearningState } from "@/lib/curriculum/types";
 import type { ToolCallReceipt } from "@/lib/mcp/contracts";
 import { BioscienceStudio } from "@/components/BioscienceStudio";
-import { auth, saveDiagnosticAttempt } from "@/lib/firebase";
+import { auth, saveDiagnosticAttempt, saveStudyBlock } from "@/lib/firebase";
+import {
+  INITIAL_STUDY_SESSIONS,
+  PRESET_BLUEPRINTS,
+  type StudySession,
+  type SubjectBlueprint,
+} from "@/lib/blueprints-data";
+import { SubjectBlueprintModal } from "@/components/SubjectBlueprintModal";
 
 export const workspaces = [
   "Overview",
@@ -50,25 +60,7 @@ export const workspaces = [
 ] as const;
 
 export type Workspace = (typeof workspaces)[number];
-
-export type StudySession = {
-  id: string;
-  day: string;
-  title: string;
-  course: string;
-  durationMinutes: number;
-  status: "not-started" | "in-progress" | "completed";
-  focusNotes: string;
-  color: string;
-};
-
-const initialStudySchedule: StudySession[] = [
-  { id: "s-1", day: "Thu", title: "Bayes diagnostic & prior formulation", course: "Applied Statistics", durationMinutes: 25, status: "in-progress", focusNotes: "Distinguish between prior probability P(H) and likelihood P(D|H)", color: "bg-[var(--coral)]" },
-  { id: "s-2", day: "Fri", title: "Prior vs Likelihood worked examples", course: "Applied Statistics", durationMinutes: 45, status: "not-started", focusNotes: "Solve medical diagnostic base-rate problem and beta-binomial update", color: "bg-[var(--cobalt)]" },
-  { id: "s-3", day: "Sat", title: "L1 vs L2 regularization lab", course: "Machine Learning", durationMinutes: 60, status: "not-started", focusNotes: "Plot parameter contour shrinkage on housing dataset", color: "bg-[var(--mint)]" },
-  { id: "s-4", day: "Sun", title: "Distributed cache invalidation study", course: "Distributed Systems", durationMinutes: 40, status: "not-started", focusNotes: "Compare write-through vs write-back cache stampede mitigations", color: "bg-[var(--ink)]" },
-  { id: "s-5", day: "Mon", title: "Capstone radar scoping", course: "BSc Project", durationMinutes: 50, status: "not-started", focusNotes: "Map required campus datasets from institutional MCP catalog", color: "bg-[var(--cobalt)]" },
-];
+export type { StudySession };
 
 export function AcademicWorkspaces({
   requestedWorkspace,
@@ -443,6 +435,10 @@ function QuizLabPanel({
       setIsQuizCompleted(true);
       const finalScore = score + (selectedOption === questions[currentIndex].correctIndex ? 1 : 0);
       onComplete?.(finalScore, questions.length, topicId);
+      // Automatically redirect to Ask CampusGenie by default where results and remedial small steps are displayed
+      onAskForHelp?.(
+        `I just completed the ${questions[0]?.topicName || topicId} diagnostic: scored ${finalScore} of ${questions.length}. Provide a complete diagnostic analysis of my understanding, pinpoint active misconceptions, explain the key principles, and map out the small steps needed to achieve full mastery.`
+      );
     }
   }
 
@@ -744,16 +740,39 @@ function StudyPlannerPanel({
   onAction: (message: string) => void;
   onAskQuestion?: (prompt: string) => void;
 }) {
-  const [sessions, setSessions] = useState<StudySession[]>(initialStudySchedule);
+  const [sessions, setSessions] = useState<StudySession[]>(INITIAL_STUDY_SESSIONS);
+  const [selectedBlueprintSession, setSelectedBlueprintSession] = useState<StudySession | null>(null);
   const [activeTimerSession, setActiveTimerSession] = useState<StudySession | null>(null);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState(25 * 60);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isAiGeneratingPlan, setIsAiGeneratingPlan] = useState(false);
   const [filter, setFilter] = useState<"all" | "in-progress" | "completed">("all");
+
+  // Add Block Modal State
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newCourse, setNewCourse] = useState("Applied Statistics");
-  const [newDuration, setNewDuration] = useState("30");
+  const [modalMode, setModalMode] = useState<"preset" | "ai" | "custom">("preset");
+  const [selectedPresetKey, setSelectedPresetKey] = useState<string>("bayes-inference");
+
+  // AI Generator state
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiCourse, setAiCourse] = useState("Machine Learning");
+  const [aiDuration, setAiDuration] = useState("45");
+  const [isGeneratingAiBlueprint, setIsGeneratingAiBlueprint] = useState(false);
+  const [aiGeneratedBlueprint, setAiGeneratedBlueprint] = useState<SubjectBlueprint | null>(null);
+
+  // Custom Form state
+  const [customTitle, setCustomTitle] = useState("");
+  const [customCourse, setCustomCourse] = useState("Applied Statistics");
+  const [customDay, setCustomDay] = useState("Today");
+  const [customDuration, setCustomDuration] = useState("35");
+  const [customBiggerGoal, setCustomBiggerGoal] = useState("");
+  const [customOverview, setCustomOverview] = useState("");
+  const [customYtTitle, setCustomYtTitle] = useState("");
+  const [customYtChannel, setCustomYtChannel] = useState("");
+  const [customYtUrl, setCustomYtUrl] = useState("");
+  const [customStepsText, setCustomStepsText] = useState(
+    "Step 1: Conceptual derivation & mental model (~15 min)\nStep 2: Hands-on code test or numerical calculation (~15 min)\nStep 3: Boundary test & diagnostic self-assessment (~10 min)"
+  );
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -792,6 +811,46 @@ function StudyPlannerPanel({
     onAction("Study session completed and recorded to term log.");
   }
 
+  function handleToggleStep(sessionId: string, stepId: string) {
+    setSessions((prev) =>
+      prev.map((session) => {
+        if (session.id !== sessionId) return session;
+        if (!session.blueprint) return session;
+
+        const updatedSteps = session.blueprint.microSteps.map((step) =>
+          step.id === stepId ? { ...step, completed: !step.completed } : step
+        );
+        const allCompleted = updatedSteps.length > 0 && updatedSteps.every((s) => s.completed);
+        const updatedSession: StudySession = {
+          ...session,
+          status: allCompleted ? "completed" : "in-progress",
+          blueprint: {
+            ...session.blueprint,
+            microSteps: updatedSteps,
+          },
+        };
+
+        if (selectedBlueprintSession?.id === sessionId) {
+          setSelectedBlueprintSession(updatedSession);
+        }
+
+        if (auth.currentUser) {
+          saveStudyBlock(auth.currentUser.uid, {
+            title: updatedSession.title,
+            course: updatedSession.course,
+            durationMinutes: updatedSession.durationMinutes,
+            status: updatedSession.status,
+            microStepsCount: updatedSteps.length,
+            completedStepsCount: updatedSteps.filter((s) => s.completed).length,
+            lastUpdated: new Date().toISOString(),
+          }).catch(() => {});
+        }
+
+        return updatedSession;
+      })
+    );
+  }
+
   function formatTime(totalSeconds: number) {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
@@ -822,23 +881,186 @@ function StudyPlannerPanel({
     }
   }
 
-  function handleAddSession(e: React.FormEvent) {
+  async function handleGenerateAiBlueprint(e: React.FormEvent) {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (!aiTopic.trim()) return;
+    setIsGeneratingAiBlueprint(true);
+    try {
+      const res = await fetch("/api/generate-blueprint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: aiTopic,
+          course: aiCourse,
+          durationMinutes: parseInt(aiDuration, 10) || 45,
+        }),
+      });
+      const data = await res.json();
+      if (data.blueprint) {
+        setAiGeneratedBlueprint(data.blueprint);
+        onAction(`Generated whole blueprint with YouTube links for "${aiTopic}".`);
+      }
+    } catch {
+      onAction("Could not generate AI blueprint. Please try again.");
+    } finally {
+      setIsGeneratingAiBlueprint(false);
+    }
+  }
+
+  function handleSaveAiBlueprint() {
+    if (!aiGeneratedBlueprint || !aiTopic.trim()) return;
     const newBlock: StudySession = {
-      id: `s-custom-${Date.now()}`,
+      id: `s-ai-${Date.now()}`,
       day: "Today",
-      title: newTitle,
-      course: newCourse,
-      durationMinutes: parseInt(newDuration, 10) || 30,
+      title: aiTopic,
+      course: aiCourse,
+      durationMinutes: parseInt(aiDuration, 10) || 45,
       status: "not-started",
-      focusNotes: "Custom study block created by student.",
-      color: "bg-[var(--mint)]",
+      focusNotes: aiGeneratedBlueprint.biggerGoal,
+      color: "bg-[var(--cobalt)]",
+      blueprint: aiGeneratedBlueprint,
     };
     setSessions((prev) => [newBlock, ...prev]);
-    setNewTitle("");
     setShowAddModal(false);
-    onAction(`Added study block: ${newBlock.title}`);
+    setAiTopic("");
+    setAiGeneratedBlueprint(null);
+    setSelectedBlueprintSession(newBlock);
+    onAction(`Added AI Blueprint block: "${newBlock.title}".`);
+    if (auth.currentUser) {
+      saveStudyBlock(auth.currentUser.uid, {
+        title: newBlock.title,
+        course: newBlock.course,
+        durationMinutes: newBlock.durationMinutes,
+        status: newBlock.status,
+        blueprintGoal: newBlock.blueprint?.biggerGoal,
+      }).catch(() => {});
+    }
+  }
+
+  function handleAddPresetBlueprint() {
+    const preset = PRESET_BLUEPRINTS[selectedPresetKey];
+    if (!preset) return;
+
+    let presetTitle = "Bayesian Parameter Estimation";
+    let presetCourse = "Applied Statistics";
+    let presetColor = "bg-[var(--coral)]";
+
+    if (selectedPresetKey === "ml-regularization") {
+      presetTitle = "L1 vs L2 Regularization & Sparsity";
+      presetCourse = "Machine Learning";
+      presetColor = "bg-[var(--mint)]";
+    } else if (selectedPresetKey === "distributed-caching") {
+      presetTitle = "Distributed Caching & Stampede Defense";
+      presetCourse = "Distributed Systems";
+      presetColor = "bg-[var(--ink)]";
+    } else if (selectedPresetKey === "alphafold-bioscience") {
+      presetTitle = "AlphaFold 3D Macromolecular Modeling";
+      presetCourse = "Bioscience & Structural Biology";
+      presetColor = "bg-teal-600";
+    }
+
+    const newBlock: StudySession = {
+      id: `s-preset-${Date.now()}`,
+      day: "Today",
+      title: presetTitle,
+      course: presetCourse,
+      durationMinutes: 45,
+      status: "not-started",
+      focusNotes: preset.biggerGoal,
+      color: presetColor,
+      blueprint: preset,
+    };
+
+    setSessions((prev) => [newBlock, ...prev]);
+    setShowAddModal(false);
+    setSelectedBlueprintSession(newBlock);
+    onAction(`Added Subject Blueprint: "${newBlock.title}" with YouTube lessons.`);
+    if (auth.currentUser) {
+      saveStudyBlock(auth.currentUser.uid, {
+        title: newBlock.title,
+        course: newBlock.course,
+        durationMinutes: newBlock.durationMinutes,
+        status: newBlock.status,
+        blueprintGoal: newBlock.blueprint?.biggerGoal,
+      }).catch(() => {});
+    }
+  }
+
+  function handleAddCustomSession(e: React.FormEvent) {
+    e.preventDefault();
+    if (!customTitle.trim()) return;
+
+    const rawSteps = customStepsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const microSteps = rawSteps.map((line, idx) => ({
+      id: `custom-step-${Date.now()}-${idx}`,
+      stepNumber: idx + 1,
+      title: line.replace(/^Step \d+:\s*/i, ""),
+      explanation: `Detailed micro-focus for ${line}. Master this sub-task before advancing.`,
+      task: `Implement or verify: ${line}. Record findings or notes.`,
+      estimatedMinutes: 15,
+      completed: false,
+      youtubeUrl: customYtUrl.trim() || undefined,
+      youtubeTitle: customYtTitle.trim() || undefined,
+    }));
+
+    const videoLinks = customYtUrl.trim()
+      ? [
+          {
+            title: customYtTitle.trim() || "Recommended Video Reference",
+            channel: customYtChannel.trim() || "Curated Lecture",
+            url: customYtUrl.trim(),
+            duration: "15:00",
+          },
+        ]
+      : [];
+
+    const blueprint: SubjectBlueprint = {
+      biggerGoal:
+        customBiggerGoal.trim() ||
+        `Achieve full conceptual and practical mastery in ${customTitle} through structured small steps.`,
+      overview:
+        customOverview.trim() ||
+        `${customTitle} provides core mathematical and computational principles. Breaking down this domain into bite-sized micro-steps allows efficient, high-retention mastery.`,
+      videoLinks,
+      microSteps,
+    };
+
+    const newBlock: StudySession = {
+      id: `s-custom-${Date.now()}`,
+      day: customDay,
+      title: customTitle,
+      course: customCourse,
+      durationMinutes: parseInt(customDuration, 10) || 30,
+      status: "not-started",
+      focusNotes: customBiggerGoal.trim() || "Custom whole-blueprint study block.",
+      color: "bg-[var(--cobalt)]",
+      blueprint,
+    };
+
+    setSessions((prev) => [newBlock, ...prev]);
+    setCustomTitle("");
+    setCustomBiggerGoal("");
+    setCustomOverview("");
+    setCustomYtTitle("");
+    setCustomYtChannel("");
+    setCustomYtUrl("");
+    setShowAddModal(false);
+    setSelectedBlueprintSession(newBlock);
+    onAction(`Added custom blueprint: "${newBlock.title}".`);
+
+    if (auth.currentUser) {
+      saveStudyBlock(auth.currentUser.uid, {
+        title: newBlock.title,
+        course: newBlock.course,
+        durationMinutes: newBlock.durationMinutes,
+        status: newBlock.status,
+        blueprintGoal: newBlock.blueprint?.biggerGoal,
+      }).catch(() => {});
+    }
   }
 
   const completedCount = sessions.filter((s) => s.status === "completed").length;
@@ -854,11 +1076,11 @@ function StudyPlannerPanel({
       <div className="flex flex-col justify-between gap-4 rounded-2xl border border-[var(--line)] bg-white/40 p-6 sm:flex-row sm:items-center">
         <div>
           <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
-            Adaptive Schedule
+            Whole Blueprint & Micro-Steps Architecture
           </span>
-          <h3 className="mt-1 font-display text-3xl">Active Study Blocks</h3>
+          <h3 className="mt-1 font-display text-3xl">Adaptive Study Blocks</h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            {completedCount} of {sessions.length} study sessions completed this week
+            {completedCount} of {sessions.length} study blocks completed · Learn small things in each project to stay efficient
           </p>
         </div>
 
@@ -893,15 +1115,15 @@ function StudyPlannerPanel({
 
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 rounded-full border border-[var(--ink)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--ink)] hover:text-white"
+            className="flex items-center gap-1.5 rounded-full border border-[var(--ink)] bg-white px-3.5 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--ink)] hover:text-white transition"
           >
-            <Plus size={14} /> Add Block
+            <Plus size={14} /> Add Subject Block
           </button>
 
           <button
             onClick={generateAiStudyPlan}
             disabled={isAiGeneratingPlan}
-            className="flex items-center gap-1.5 rounded-full bg-[var(--cobalt)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-[var(--cobalt)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition"
           >
             <Sparkles size={14} />
             {isAiGeneratingPlan ? "Optimizing..." : "AI Plan Optimization"}
@@ -928,7 +1150,7 @@ function StudyPlannerPanel({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsTimerRunning((prev) => !prev)}
-                className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--ink)] hover:bg-[var(--mint)]"
+                className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--ink)] hover:bg-[var(--mint)] transition"
               >
                 {isTimerRunning ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
               </button>
@@ -937,13 +1159,13 @@ function StudyPlannerPanel({
                   completeSession(activeTimerSession.id);
                   setActiveTimerSession(null);
                 }}
-                className="rounded-full bg-[var(--mint)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
+                className="rounded-full bg-[var(--mint)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] hover:opacity-90 transition"
               >
                 Mark Done
               </button>
               <button
                 onClick={() => setActiveTimerSession(null)}
-                className="text-xs text-white/60 hover:text-white"
+                className="text-xs text-white/60 hover:text-white p-1"
               >
                 <X size={16} />
               </button>
@@ -957,135 +1179,564 @@ function StudyPlannerPanel({
         {filteredSessions.map((session) => {
           const isDone = session.status === "completed";
           const isActive = activeTimerSession?.id === session.id;
+          const blueprint = session.blueprint;
+          const totalSteps = blueprint?.microSteps.length || 0;
+          const completedSteps = blueprint?.microSteps.filter((s) => s.completed).length || 0;
+          const stepPercent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
           return (
             <div
               key={session.id}
-              className={`rounded-2xl border p-5 transition ${
+              className={`flex flex-col justify-between rounded-2xl border p-5 transition ${
                 isDone
                   ? "border-[var(--line)] bg-white/30 opacity-75"
                   : isActive
                   ? "border-[var(--cobalt)] bg-white shadow-md ring-2 ring-[var(--cobalt)]/20"
-                  : "border-[var(--line)] bg-white/60 hover:-translate-y-0.5 hover:shadow-xs"
+                  : "border-[var(--line)] bg-white/70 hover:-translate-y-0.5 hover:shadow-xs"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] uppercase text-[var(--muted)]">
-                  {session.day} · {session.durationMinutes} min
-                </span>
-                <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                    isDone
-                      ? "bg-[var(--mint)] text-emerald-900"
-                      : "bg-[var(--paper-deep)] text-[var(--muted)]"
-                  }`}
-                >
-                  {isDone ? "Completed" : "Scheduled"}
-                </span>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase text-[var(--muted)]">
+                    {session.day} · {session.durationMinutes} min
+                  </span>
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                      isDone
+                        ? "bg-[var(--mint)] text-emerald-900"
+                        : "bg-[var(--paper-deep)] text-[var(--muted)]"
+                    }`}
+                  >
+                    {isDone ? "Completed" : "Scheduled"}
+                  </span>
+                </div>
+
+                <h4 className="mt-3 font-display text-lg font-semibold">{session.title}</h4>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">{session.course}</p>
+
+                {/* Overarching Bigger Goal Callout */}
+                {blueprint?.biggerGoal ? (
+                  <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200/80 p-2.5 text-xs">
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                      <Target size={13} className="text-teal-600 shrink-0" />
+                      <span className="text-[11px] uppercase tracking-wide text-teal-800">Bigger Goal:</span>
+                    </div>
+                    <p className="mt-1 text-slate-600 line-clamp-2 text-[11px] leading-relaxed">
+                      {blueprint.biggerGoal}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs leading-5 text-[var(--muted)] line-clamp-2">
+                    {session.focusNotes}
+                  </p>
+                )}
+
+                {/* Small Micro-steps Progress Bar */}
+                {totalSteps > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-600 font-medium">Small Micro-Steps</span>
+                      <span className="font-mono text-slate-500">
+                        {completedSteps}/{totalSteps} ({stepPercent}%)
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-teal-600 rounded-full transition-all duration-300"
+                        style={{ width: `${stepPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* YouTube Video Counter Badge */}
+                {blueprint?.videoLinks && blueprint.videoLinks.length > 0 && (
+                  <div className="mt-2.5 flex items-center gap-1 text-[11px] text-red-600 font-medium">
+                    <Youtube size={13} />
+                    <span>{blueprint.videoLinks.length} Curated YouTube Video Lessons</span>
+                  </div>
+                )}
               </div>
 
-              <h4 className="mt-4 font-display text-lg font-semibold">{session.title}</h4>
-              <p className="mt-1 text-xs text-[var(--muted)]">{session.course}</p>
-              <p className="mt-3 text-xs leading-5 text-[var(--muted)] line-clamp-2">
-                {session.focusNotes}
-              </p>
-
-              <div className="mt-5 flex items-center justify-between border-t border-[var(--line)] pt-3">
-                {!isDone ? (
+              {/* Bottom Actions */}
+              <div className="mt-5 space-y-2 border-t border-[var(--line)] pt-3">
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => startTimerForSession(session)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-[var(--cobalt)] hover:underline"
+                    onClick={() => setSelectedBlueprintSession(session)}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition"
                   >
-                    <Play size={13} /> Start Focus Timer
+                    <BookOpen size={13} className="text-teal-400" />
+                    <span>Whole Blueprint & Videos</span>
                   </button>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                    <Check size={14} /> Finished
-                  </span>
-                )}
 
-                {!isDone && (
                   <button
-                    onClick={() => completeSession(session.id)}
-                    className="text-[11px] text-[var(--muted)] hover:text-[var(--ink)]"
+                    onClick={() => {
+                      onAskQuestion?.(
+                        `Conduct an adaptive review and diagnostic on "${session.title}" (${session.course}). Explain the core theoretical blueprint, identify subtle pitfalls, and outline the small actionable micro-steps to achieve the bigger goal: ${blueprint?.biggerGoal || session.focusNotes}.`
+                      );
+                      onAction(`Redirecting to Ask CampusGenie for review of "${session.title}".`);
+                    }}
+                    title="Review & Diagnose in Ask CampusGenie (auto-scrolls)"
+                    className="flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
                   >
-                    Mark complete
+                    <Sparkles size={13} className="text-[var(--cobalt)]" />
+                    <span className="hidden sm:inline">Review</span>
                   </button>
-                )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  {!isDone ? (
+                    <button
+                      onClick={() => startTimerForSession(session)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-[var(--cobalt)] hover:underline"
+                    >
+                      <Play size={13} /> Focus Timer
+                    </button>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                      <Check size={14} /> Completed
+                    </span>
+                  )}
+
+                  {!isDone && (
+                    <button
+                      onClick={() => completeSession(session.id)}
+                      className="text-[11px] text-[var(--muted)] hover:text-[var(--ink)]"
+                    >
+                      Mark done
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Add Block Modal */}
+      {/* Add Block Modal with 3 Tabs: Curated Presets, AI Generation, Custom Blueprint */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-              <h3 className="font-display text-xl">Schedule Study Block</h3>
-              <button onClick={() => setShowAddModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[var(--line)] p-5">
+              <div>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-teal-700 font-semibold">
+                  New Subject Block
+                </span>
+                <h3 className="font-display text-2xl">Attach a Whole Blueprint & Small Steps</h3>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-500 hover:bg-slate-100"
+              >
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleAddSession} className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs font-medium text-[var(--muted)]">Topic or Focus</label>
-                <input
-                  type="text"
-                  required
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Beta-Binomial conjugate analysis"
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] p-2.5 text-sm outline-none focus:border-[var(--cobalt)]"
-                />
-              </div>
 
-              <div>
-                <label className="text-xs font-medium text-[var(--muted)]">Course</label>
-                <select
-                  value={newCourse}
-                  onChange={(e) => setNewCourse(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] p-2.5 text-sm outline-none focus:border-[var(--cobalt)]"
-                >
-                  <option value="Applied Statistics">Applied Statistics (STAT-301)</option>
-                  <option value="Machine Learning">Machine Learning (CS-402)</option>
-                  <option value="Distributed Systems">Distributed Systems (CS-410)</option>
-                  <option value="BSc Capstone">BSc Capstone Project</option>
-                </select>
-              </div>
+            {/* Mode Switch Tabs */}
+            <div className="flex border-b border-[var(--line)] bg-slate-50 p-2 gap-2 text-xs font-medium">
+              <button
+                onClick={() => setModalMode("preset")}
+                className={`flex-1 py-2 px-3 rounded-xl transition ${
+                  modalMode === "preset"
+                    ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200"
+                    : "text-slate-600 hover:bg-white/60"
+                }`}
+              >
+                1. Curated Blueprint Library
+              </button>
+              <button
+                onClick={() => setModalMode("ai")}
+                className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                  modalMode === "ai"
+                    ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200"
+                    : "text-slate-600 hover:bg-white/60"
+                }`}
+              >
+                <Sparkles size={13} className="text-teal-600" />
+                <span>2. AI Blueprint Engine</span>
+              </button>
+              <button
+                onClick={() => setModalMode("custom")}
+                className={`flex-1 py-2 px-3 rounded-xl transition ${
+                  modalMode === "custom"
+                    ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200"
+                    : "text-slate-600 hover:bg-white/60"
+                }`}
+              >
+                3. Custom Blueprint
+              </button>
+            </div>
 
-              <div>
-                <label className="text-xs font-medium text-[var(--muted)]">Planned Duration (Minutes)</label>
-                <input
-                  type="number"
-                  min="10"
-                  max="180"
-                  value={newDuration}
-                  onChange={(e) => setNewDuration(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] p-2.5 text-sm outline-none focus:border-[var(--cobalt)]"
-                />
-              </div>
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+              {/* Tab 1: Curated Library */}
+              {modalMode === "preset" && (
+                <div className="space-y-4">
+                  <p className="text-slate-600">
+                    Select a battle-tested blueprint template with ready-to-watch YouTube lectures (3Blue1Brown, StatQuest, etc.) and sequenced micro-steps:
+                  </p>
 
-              <div className="flex justify-end gap-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="rounded-full px-4 py-2 text-xs font-semibold text-[var(--muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-full bg-[var(--ink)] px-5 py-2 text-xs font-semibold text-white hover:bg-[var(--cobalt)]"
-                >
-                  Save Study Block
-                </button>
-              </div>
-            </form>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      {
+                        key: "bayes-inference",
+                        title: "Bayesian Inference & Belief Updates",
+                        course: "Applied Statistics",
+                        desc: "Prior vs Likelihood distinction, Base-Rate Fallacy, Beta-Binomial conjugate analysis.",
+                        videos: "3Blue1Brown & StatQuest",
+                        steps: "4 micro-steps",
+                      },
+                      {
+                        key: "ml-regularization",
+                        title: "L1 vs L2 Regularization & Sparsity",
+                        course: "Machine Learning",
+                        desc: "Ridge vs Lasso geometric penalty contours, bias-variance tradeoff, sparsity.",
+                        videos: "StatQuest & MIT OCW",
+                        steps: "4 micro-steps",
+                      },
+                      {
+                        key: "distributed-caching",
+                        title: "Distributed Caching & Stampedes",
+                        course: "Distributed Systems",
+                        desc: "Write-through vs Write-back, cache stampede mitigations, consistent hashing.",
+                        videos: "Hussein Nasser & ByteByteGo",
+                        steps: "4 micro-steps",
+                      },
+                      {
+                        key: "alphafold-bioscience",
+                        title: "AlphaFold 3D Macromolecular Modeling",
+                        course: "Bioscience & Structural Biology",
+                        desc: "Predicted pLDDT confidence scoring, PAE domain alignment, conformational flexibility.",
+                        videos: "EMBL-EBI & DeepMind",
+                        steps: "3 micro-steps",
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.key}
+                        onClick={() => setSelectedPresetKey(item.key)}
+                        className={`cursor-pointer rounded-xl border p-3.5 transition ${
+                          selectedPresetKey === item.key
+                            ? "border-teal-600 bg-teal-50/50 ring-2 ring-teal-600/20"
+                            : "border-slate-200 bg-white hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-900 text-sm">{item.title}</span>
+                          <span className="text-[10px] font-mono text-teal-800 bg-teal-100 px-2 py-0.5 rounded-full">
+                            {item.steps}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-medium">{item.course}</span>
+                        <p className="mt-1 text-slate-600 text-[11px] leading-relaxed">{item.desc}</p>
+                        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                          <Youtube size={12} />
+                          <span>Lectures: {item.videos}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {PRESET_BLUEPRINTS[selectedPresetKey] && (
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+                        <Target size={14} className="text-teal-600" />
+                        <span>Bigger Goal:</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        {PRESET_BLUEPRINTS[selectedPresetKey].biggerGoal}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={handleAddPresetBlueprint}
+                      className="rounded-full bg-slate-900 px-6 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 transition"
+                    >
+                      Attach Preset Blueprint to Schedule
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: AI Blueprint Generator */}
+              {modalMode === "ai" && (
+                <div className="space-y-4">
+                  <p className="text-slate-600">
+                    Enter any academic topic or capstone project requirement. Gemini will synthesize the overarching bigger goal, complete text explanation, curated YouTube video links, and small 15-minute micro-steps.
+                  </p>
+
+                  <form onSubmit={handleGenerateAiBlueprint} className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700">Subject Topic / Requirement</label>
+                      <input
+                        type="text"
+                        required
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        placeholder="e.g. Transformer Self-Attention Mechanics, Fast Fourier Transform, CRISPR-Cas9"
+                        className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                      />
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-xs font-medium text-slate-700">Course</label>
+                        <select
+                          value={aiCourse}
+                          onChange={(e) => setAiCourse(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                        >
+                          <option value="Machine Learning">Machine Learning (CS-402)</option>
+                          <option value="Applied Statistics">Applied Statistics (STAT-301)</option>
+                          <option value="Distributed Systems">Distributed Systems (CS-410)</option>
+                          <option value="Bioscience & Structural Biology">Bioscience & Structural Biology (BIO-502)</option>
+                          <option value="BSc Capstone">BSc Capstone Project</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-slate-700">Planned Duration (Minutes)</label>
+                        <input
+                          type="number"
+                          min="15"
+                          max="180"
+                          value={aiDuration}
+                          onChange={(e) => setAiDuration(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-1">
+                      <button
+                        type="submit"
+                        disabled={isGeneratingAiBlueprint || !aiTopic.trim()}
+                        className="flex items-center gap-1.5 rounded-full bg-teal-600 px-5 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition"
+                      >
+                        <Sparkles size={13} />
+                        {isGeneratingAiBlueprint ? "Synthesizing Blueprint & YouTube Links..." : "Generate Whole Blueprint with Gemini"}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* AI Generated Blueprint Preview */}
+                  {aiGeneratedBlueprint && (
+                    <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50/40 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-teal-900 text-sm">Generated Blueprint Ready</span>
+                        <span className="text-[10px] font-mono text-teal-700">
+                          {aiGeneratedBlueprint.microSteps.length} small steps · {aiGeneratedBlueprint.videoLinks.length} videos
+                        </span>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-3 border border-teal-100">
+                        <span className="font-bold text-slate-800">Bigger Goal:</span>
+                        <p className="mt-0.5 text-slate-600 leading-relaxed text-[11px]">
+                          {aiGeneratedBlueprint.biggerGoal}
+                        </p>
+                      </div>
+
+                      <div>
+                        <span className="font-bold text-slate-800">Curated Video Lessons:</span>
+                        <div className="mt-1 space-y-1">
+                          {aiGeneratedBlueprint.videoLinks.map((vid, idx) => (
+                            <div key={idx} className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded border border-slate-200 text-[11px]">
+                              <span className="font-medium text-slate-700 truncate pr-2">
+                                🎬 {vid.channel}: {vid.title}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-400 shrink-0">{vid.duration}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="font-bold text-slate-800">Micro-Steps Checklist:</span>
+                        <div className="mt-1 space-y-1">
+                          {aiGeneratedBlueprint.microSteps.map((step) => (
+                            <div key={step.id} className="bg-white px-2.5 py-1.5 rounded border border-slate-200 text-[11px] flex items-center justify-between">
+                              <span className="text-slate-700">
+                                Step {step.stepNumber}: {step.title}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-400 shrink-0">~{step.estimatedMinutes} min</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={handleSaveAiBlueprint}
+                          className="rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
+                        >
+                          Save AI Blueprint to My Study Schedule
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3: Custom Blueprint Builder */}
+              {modalMode === "custom" && (
+                <form onSubmit={handleAddCustomSession} className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700">Subject Topic / Block Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={customTitle}
+                        onChange={(e) => setCustomTitle(e.target.value)}
+                        placeholder="e.g. Distributed Consensus (Raft)"
+                        className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700">Course</label>
+                      <select
+                        value={customCourse}
+                        onChange={(e) => setCustomCourse(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                      >
+                        <option value="Applied Statistics">Applied Statistics (STAT-301)</option>
+                        <option value="Machine Learning">Machine Learning (CS-402)</option>
+                        <option value="Distributed Systems">Distributed Systems (CS-410)</option>
+                        <option value="Bioscience & Structural Biology">Bioscience & Structural Biology (BIO-502)</option>
+                        <option value="BSc Capstone">BSc Capstone Project</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700">Day / Target Schedule</label>
+                      <input
+                        type="text"
+                        value={customDay}
+                        onChange={(e) => setCustomDay(e.target.value)}
+                        placeholder="e.g. Today, Tomorrow, Wed"
+                        className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700">Planned Duration (Minutes)</label>
+                      <input
+                        type="number"
+                        min="10"
+                        max="180"
+                        value={customDuration}
+                        onChange={(e) => setCustomDuration(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-700">
+                      🎯 Bigger Goal (The overarching outcome to achieve)
+                    </label>
+                    <input
+                      type="text"
+                      value={customBiggerGoal}
+                      onChange={(e) => setCustomBiggerGoal(e.target.value)}
+                      placeholder="e.g. Implement leader election and log replication without split-brain"
+                      className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-700">
+                      📖 Detailed Conceptual Blueprint & Principles (Text Explanation)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={customOverview}
+                      onChange={(e) => setCustomOverview(e.target.value)}
+                      placeholder="Explain key theorems, definitions, tradeoffs, or mental models for this domain..."
+                      className="mt-1 w-full rounded-xl border border-slate-300 p-2.5 text-xs outline-none focus:border-teal-600"
+                    />
+                  </div>
+
+                  {/* Curated YouTube Video Info */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <span className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
+                      <Youtube size={14} className="text-red-600" />
+                      Curated YouTube Video Lecture
+                    </span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        type="text"
+                        value={customYtTitle}
+                        onChange={(e) => setCustomYtTitle(e.target.value)}
+                        placeholder="Video Title (e.g. Raft Consensus Algorithm)"
+                        className="rounded-lg border border-slate-300 bg-white p-2 text-xs outline-none focus:border-teal-600"
+                      />
+                      <input
+                        type="text"
+                        value={customYtChannel}
+                        onChange={(e) => setCustomYtChannel(e.target.value)}
+                        placeholder="Channel (e.g. MIT 6.824 / Hussein Nasser)"
+                        className="rounded-lg border border-slate-300 bg-white p-2 text-xs outline-none focus:border-teal-600"
+                      />
+                    </div>
+                    <input
+                      type="url"
+                      value={customYtUrl}
+                      onChange={(e) => setCustomYtUrl(e.target.value)}
+                      placeholder="YouTube URL (e.g. https://www.youtube.com/watch?v=...)"
+                      className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs outline-none focus:border-teal-600"
+                    />
+                  </div>
+
+                  {/* Micro Steps Area */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-700">
+                      ✅ Small Steps to Achieve the Bigger Goal (One step per line)
+                    </label>
+                    <p className="text-[10px] text-slate-500 mb-1">
+                      Breaking the project into small 10-15 minute things makes learning efficient.
+                    </p>
+                    <textarea
+                      rows={3}
+                      value={customStepsText}
+                      onChange={(e) => setCustomStepsText(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono outline-none focus:border-teal-600"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="rounded-full px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-full bg-slate-900 px-6 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
+                    >
+                      Save Custom Blueprint
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
+
+      {/* Subject Blueprint & Micro-Steps Modal */}
+      <SubjectBlueprintModal
+        isOpen={Boolean(selectedBlueprintSession)}
+        onClose={() => setSelectedBlueprintSession(null)}
+        session={selectedBlueprintSession}
+        onToggleStep={handleToggleStep}
+        onAskQuestion={onAskQuestion}
+      />
     </div>
   );
 }

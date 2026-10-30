@@ -149,10 +149,17 @@ export async function saveStudyBlock(
   userId: string,
   block: {
     title: string;
-    durationMin: number;
-    completed: boolean;
+    durationMin?: number;
+    durationMinutes?: number;
+    completed?: boolean;
+    status?: string;
     notes?: string;
-    scheduledFor: string;
+    course?: string;
+    scheduledFor?: string;
+    microStepsCount?: number;
+    completedStepsCount?: number;
+    blueprintGoal?: string;
+    lastUpdated?: string;
   }
 ) {
   const id = `block_${Date.now()}`;
@@ -161,10 +168,16 @@ export async function saveStudyBlock(
     await setDoc(doc(db, 'users', userId, 'studyBlocks', id), {
       userId,
       title: block.title,
-      durationMin: block.durationMin,
-      completed: block.completed,
+      durationMin: block.durationMin ?? block.durationMinutes ?? 30,
+      completed: block.completed ?? block.status === 'completed',
+      status: block.status ?? (block.completed ? 'completed' : 'in-progress'),
+      course: block.course || 'General',
       notes: block.notes || '',
-      scheduledFor: block.scheduledFor,
+      blueprintGoal: block.blueprintGoal || '',
+      microStepsCount: block.microStepsCount || 0,
+      completedStepsCount: block.completedStepsCount || 0,
+      scheduledFor: block.scheduledFor || new Date().toISOString(),
+      updatedAt: block.lastUpdated || new Date().toISOString(),
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, path);
