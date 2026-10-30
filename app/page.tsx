@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -25,9 +25,11 @@ import {
   Network,
   Sparkles,
   Target,
+  Users,
   X,
   GraduationCap,
 } from "lucide-react";
+import { motion } from "motion/react";
 import {
   demoEvidence,
   demoLearner,
@@ -37,6 +39,9 @@ import { curriculumGraph } from "@/lib/graph/curriculum";
 import { AcademicWorkspaces, type Workspace } from "@/components/AcademicWorkspaces";
 import { VoiceTutorModal } from "@/components/VoiceTutorModal";
 import { InteractiveLearningGraph } from "@/components/InteractiveLearningGraph";
+import { FuturisticOmniSearch } from "@/components/FuturisticOmniSearch";
+import { FuturisticCommandDeck } from "@/components/FuturisticCommandDeck";
+import { PeerStudyStatusSidebar } from "@/components/PeerStudyStatusSidebar";
 import { auth, signInWithGoogle, logOut, testConnection } from "@/lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import type { Evidence } from "@/lib/rag/contracts";
@@ -84,6 +89,9 @@ export default function Home() {
 
   // Gemini Live Voice Tutor
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+
+  // Peer Study Status Sidebar
+  const [peerSidebarOpen, setPeerSidebarOpen] = useState(false);
 
   // Google Search Grounding with gemini-3.8-flash
   const [useSearchGrounding, setUseSearchGrounding] = useState(false);
@@ -134,6 +142,48 @@ export default function Home() {
   const [showLearnerSignalModal, setShowLearnerSignalModal] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
+
+  // Dynamic Search Recommendations for Prompt Console
+  const promptSuggestions = useMemo(() => {
+    const text = message.toLowerCase().trim();
+    if (!text) {
+      return [
+        { label: "Bayes Prior vs Likelihood", prompt: "Explain with a concrete numerical example why ignoring the prior leads to the base-rate fallacy in Bayesian inference." },
+        { label: "L1 vs L2 Regularization", prompt: "Compare L1 Lasso and L2 Ridge regularization with contour diagrams and weight sparsity math." },
+        { label: "CUIMS 75% Safe-Bunks", prompt: "Calculate how many safe bunks I have for 21CSH-308 DAA and suggest a 2-week attendance recovery schedule." },
+        { label: "Backpropagation Equations", prompt: "Derive the backpropagation chain rule gradient step for cross-entropy loss in a multi-layer perceptron." },
+      ];
+    }
+    if (text.includes("bayes") || text.includes("prior") || text.includes("prob")) {
+      return [
+        { label: "Disease Testing Problem", prompt: "Solve step-by-step: P(Disease)=0.01, Sensitivity=0.95, False Pos=0.05. Find P(Disease|Positive)." },
+        { label: "Conjugate Priors", prompt: "Derive the posterior distribution for a Beta prior and Binomial likelihood step-by-step." },
+        { label: "Bayes Micro-Quiz", prompt: "Test my understanding of Bayesian inference with 3 quick diagnostic questions." },
+      ];
+    }
+    if (text.includes("reg") || text.includes("lasso") || text.includes("ridge") || text.includes("overfit")) {
+      return [
+        { label: "L1 Sparsity Geometry", prompt: "Why does L1 norm have sharp corners that hit zero weights while L2 only shrinks them asymptotically?" },
+        { label: "ElasticNet Penalty", prompt: "When should I combine L1 and L2 penalties using ElasticNet in high-dimensional feature spaces?" },
+      ];
+    }
+    if (text.includes("attend") || text.includes("bunk") || text.includes("cuims") || text.includes("mst")) {
+      return [
+        { label: "CUIMS 75% Recovery Formula", prompt: "Explain the official CUIMS 75% formula C = 3D - 4A and calculate my exact recovery requirements." },
+        { label: "MST-2 Exam Strategy", prompt: "Generate a 5-day study blueprint to score 18+/20 in upcoming MST-2 exams for Computer Science." },
+      ];
+    }
+    if (text.includes("algo") || text.includes("dp") || text.includes("graph")) {
+      return [
+        { label: "Bellman-Ford Negative Cycles", prompt: "Derive Bellman-Ford shortest paths algorithm and prove why |V|-1 iterations suffice." },
+        { label: "Dynamic Programming DAGs", prompt: "Walk me through DAG longest path state formulation with topological sorting." },
+      ];
+    }
+    return [
+      { label: `Deep Dive on "${text.slice(0, 22)}..."`, prompt: `Explain ${text} with intuitive real-world analogies, step-by-step math derivations, and exam rubrics.` },
+      { label: "Generate Study Blueprint", prompt: `Create a 5-stage learning blueprint for ${text} with micro-steps and recommended video lectures.` },
+    ];
+  }, [message]);
 
   const workspaceTarget: Workspace =
     activeNav === "Project Radar"
@@ -419,7 +469,21 @@ export default function Home() {
             <span className="text-stone-300">/</span>
             <span className="text-slate-900 font-semibold">{activeNav}</span>
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Peer Study Status Sidebar Trigger */}
+            <button
+              onClick={() => setPeerSidebarOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 hover:bg-white text-slate-800 text-xs font-semibold border border-stone-200 shadow-2xs transition hover:border-teal-400 group"
+              title="Open Peer Study Status & Classmate Availability"
+            >
+              <Users size={13} className="text-teal-600 group-hover:scale-110 transition" />
+              <span className="hidden md:inline">Peer Study</span>
+              <span className="flex items-center gap-1 text-[10px] text-emerald-700 font-mono font-bold bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
+            </button>
+
             {/* Live Voice Tutor Button */}
             <button
               onClick={() => setVoiceModalOpen(true)}
@@ -484,8 +548,17 @@ export default function Home() {
         </header>
 
         <div className="mx-auto max-w-[1240px]">
+          {/* Futuristic Omni-Search with Real-Time AI Recommendations HUD */}
+          <div className="mt-6 mb-2">
+            <FuturisticOmniSearch
+              onSelectPrompt={(p) => executePrompt(p)}
+              onNavigateWorkspace={(ws) => selectNavigation(ws)}
+              onOpenVoiceTutor={() => setVoiceModalOpen(true)}
+            />
+          </div>
+
           {/* Hero Section */}
-          <div className="reveal mt-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="reveal mt-6 flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
               <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--cobalt)] font-semibold">
                 Active Study Mission · Term 04
@@ -503,6 +576,21 @@ export default function Home() {
               CampusGenie shapes your learning path by what you understand, grounded directly in verified curriculum evidence.
             </div>
           </div>
+
+          {/* Interactive Mission Control Command Deck */}
+          <FuturisticCommandDeck
+            onSelectPortal={(portalId) => {
+              if (portalId === "portal-ask") {
+                document.getElementById("ask-campusgenie")?.scrollIntoView({ behavior: "smooth", block: "center" });
+              } else if (portalId === "portal-quiz") {
+                selectNavigation("Quiz Lab");
+              } else if (portalId === "portal-cuims") {
+                selectNavigation("CUIMS Student Hub");
+              } else if (portalId === "portal-voice") {
+                setVoiceModalOpen(true);
+              }
+            }}
+          />
 
           {/* Study Mission & Learner Signal Cards */}
           <div className="mt-10 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
@@ -701,6 +789,25 @@ export default function Home() {
                   </div>
                 </form>
 
+                {/* Dynamic AI Prompt Recommendations Bar */}
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-stone-400 font-semibold flex items-center gap-1">
+                    <Sparkles size={11} className="text-teal-600" />
+                    <span>Recommended based on search:</span>
+                  </span>
+                  {promptSuggestions.map((sug, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => executePrompt(sug.prompt)}
+                      className="group flex items-center gap-1 text-[11px] font-medium text-stone-600 hover:text-teal-800 bg-white/70 hover:bg-teal-50/80 border border-stone-200/80 hover:border-teal-300 rounded-lg px-2.5 py-1 transition-all duration-150 shadow-2xs"
+                    >
+                      <span>{sug.label}</span>
+                      <ArrowRight size={10} className="text-stone-400 group-hover:text-teal-600 transition" />
+                    </button>
+                  ))}
+                </div>
+
                 {isAsking && (
                   <div className="mt-3 text-xs text-[var(--cobalt)] animate-pulse flex items-center gap-2 font-medium">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--cobalt)] animate-ping" />
@@ -719,8 +826,14 @@ export default function Home() {
                 )}
 
                 {/* Assistant Output Container */}
+                {/* Assistant Output Container */}
                 {assistantReply && (
-                  <div className="mt-4 whitespace-pre-line rounded-2xl bg-white/95 backdrop-blur-md p-5 sm:p-6 text-sm leading-relaxed border border-stone-200/90 shadow-sm transition-all">
+                  <motion.div
+                    initial={{ opacity: 0, y: 12, scale: 0.99 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.25 }}
+                    className="mt-4 whitespace-pre-line rounded-2xl bg-white/95 backdrop-blur-md p-5 sm:p-6 text-sm leading-relaxed border border-teal-500/30 shadow-[0_4px_25px_-5px_rgba(20,184,166,0.15)] transition-all"
+                  >
                     <div className="prose prose-stone max-w-none text-slate-800 text-[13px] sm:text-sm">
                       {assistantReply}
                     </div>
@@ -774,7 +887,32 @@ export default function Home() {
                         )}
                       </div>
                     )}
-                  </div>
+
+                    {/* Interactive Follow-Up Recommendations */}
+                    <div className="mt-4 border-t border-stone-100 pt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-mono text-teal-700 font-semibold flex items-center gap-1">
+                        <Sparkles size={11} /> Next Actions:
+                      </span>
+                      <button
+                        onClick={() => executePrompt(`Give me 2 practice test questions to verify if I truly understood this: ${assistantReply.slice(0, 100)}`)}
+                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-stone-50 hover:bg-teal-50 border border-stone-200 px-2.5 py-1 rounded-lg transition"
+                      >
+                        Quiz Me on This
+                      </button>
+                      <button
+                        onClick={() => selectNavigation("Study Studio")}
+                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-stone-50 hover:bg-teal-50 border border-stone-200 px-2.5 py-1 rounded-lg transition"
+                      >
+                        Add to Study Blueprint
+                      </button>
+                      <button
+                        onClick={() => setVoiceModalOpen(true)}
+                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-stone-50 hover:bg-teal-50 border border-stone-200 px-2.5 py-1 rounded-lg transition"
+                      >
+                        Discuss in Voice Tutor
+                      </button>
+                    </div>
+                  </motion.div>
                 )}
               </div>
 
@@ -1239,6 +1377,34 @@ export default function Home() {
         isOpen={voiceModalOpen}
         onClose={() => setVoiceModalOpen(false)}
         activeTopic={bayesTopic?.topic}
+      />
+
+      {/* 7. Floating Right-Edge Peer Study Dock Trigger */}
+      <button
+        onClick={() => setPeerSidebarOpen(true)}
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-30 flex items-center gap-1.5 bg-slate-900/95 hover:bg-slate-900 text-white pl-2.5 pr-1.5 py-3 rounded-l-2xl shadow-xl backdrop-blur-md border border-r-0 border-teal-500/30 transition-all hover:pl-3.5 group select-none cursor-pointer"
+        title="Open Peer Study Status (Community Active)"
+      >
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="relative">
+            <Users size={14} className="text-teal-400 group-hover:scale-110 transition" />
+            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse ring-1 ring-slate-900" />
+          </div>
+          <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-mono tracking-wider text-stone-200 font-bold uppercase">
+            Peer Study
+          </span>
+        </div>
+      </button>
+
+      {/* 8. Peer Study Status Community Sidebar Drawer */}
+      <PeerStudyStatusSidebar
+        isOpen={peerSidebarOpen}
+        onClose={() => setPeerSidebarOpen(false)}
+        currentWorkspace={activeNav}
+        onSelectPrompt={(prompt) => executePrompt(prompt)}
+        onOpenVoiceTutor={() => {
+          setVoiceModalOpen(true);
+        }}
       />
     </main>
   );
