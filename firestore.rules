@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Pillar 1/Phase 4)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['email', 'displayName', 'createdAt']) &&
+        data.keys().hasOnly(['email', 'displayName', 'photoURL', 'targetTrack', 'createdAt', 'updatedAt']) &&
+        data.email is string && data.email.size() <= 150 &&
+        data.displayName is string && data.displayName.size() <= 100 &&
+        data.createdAt is string && data.createdAt.size() <= 60 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+        (!('targetTrack' in data) || (data.targetTrack is string && data.targetTrack.size() <= 100)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 60));
+    }
+
+    function isValidDiagnostic(data, userId) {
+      return data.keys().hasAll(['userId', 'topic', 'score', 'total', 'percentage', 'attemptedAt']) &&
+        data.keys().hasOnly(['userId', 'topic', 'score', 'total', 'percentage', 'misconceptionsCleared', 'attemptedAt']) &&
+        data.userId == userId &&
+        data.topic is string && data.topic.size() <= 120 &&
+        data.score is number && data.score >= 0 &&
+        data.total is number && data.total > 0 &&
+        data.percentage is number && data.percentage >= 0 && data.percentage <= 100 &&
+        data.attemptedAt is string && data.attemptedAt.size() <= 60 &&
+        (!('misconceptionsCleared' in data) || (data.misconceptionsCleared is number && data.misconceptionsCleared >= 0));
+    }
+
+    function isValidStudyBlock(data, userId) {
+      return data.keys().hasAll(['userId', 'title', 'durationMin', 'completed', 'scheduledFor']) &&
+        data.keys().hasOnly(['userId', 'title', 'durationMin', 'completed', 'notes', 'scheduledFor']) &&
+        data.userId == userId &&
+        data.title is string && data.title.size() <= 150 &&
+        data.durationMin is number && data.durationMin > 0 && data.durationMin <= 1440 &&
+        data.completed is bool &&
+        data.scheduledFor is string && data.scheduledFor.size() <= 60 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500));
+    }
+
+    function isValidProjectBookmark(data, userId) {
+      return data.keys().hasAll(['userId', 'projectId', 'title', 'tier', 'savedAt']) &&
+        data.keys().hasOnly(['userId', 'projectId', 'title', 'tier', 'savedAt']) &&
+        data.userId == userId &&
+        data.projectId is string && data.projectId.size() <= 100 &&
+        data.title is string && data.title.size() <= 150 &&
+        data.tier is string && data.tier.size() <= 50 &&
+        data.savedAt is string && data.savedAt.size() <= 60;
+    }
+
+    // User profile document
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: Diagnostics
+      match /diagnostics/{diagnosticId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(diagnosticId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(diagnosticId) && isValidDiagnostic(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(diagnosticId) && isValidDiagnostic(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().attemptedAt == existing().attemptedAt;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(diagnosticId);
+      }
+
+      // Subcollection: Study Blocks
+      match /studyBlocks/{blockId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(blockId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(blockId) && isValidStudyBlock(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(blockId) && isValidStudyBlock(incoming(), userId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(blockId);
+      }
+
+      // Subcollection: Project Bookmarks
+      match /projectBookmarks/{bookmarkId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(bookmarkId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(bookmarkId) && isValidProjectBookmark(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(bookmarkId) && isValidProjectBookmark(incoming(), userId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(bookmarkId);
+      }
+    }
+  }
+}

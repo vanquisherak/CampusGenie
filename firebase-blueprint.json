@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account information and active academic track",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "targetTrack": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "displayName", "createdAt"]
+    },
+    "DiagnosticResult": {
+      "title": "DiagnosticResult",
+      "description": "Adaptive quiz lab diagnostic result with question scores and misconception log",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "topic": { "type": "string", "maxLength": 120 },
+        "score": { "type": "number" },
+        "total": { "type": "number" },
+        "percentage": { "type": "number" },
+        "misconceptionsCleared": { "type": "number" },
+        "attemptedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "topic", "score", "total", "percentage", "attemptedAt"]
+    },
+    "StudyBlock": {
+      "title": "StudyBlock",
+      "description": "Personalized study timetable blocks and pomodoro completion state",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "durationMin": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "scheduledFor": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "durationMin", "completed", "scheduledFor"]
+    },
+    "ProjectBookmark": {
+      "title": "ProjectBookmark",
+      "description": "Bookmarked capstone and portfolio project blueprints",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "projectId": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 150 },
+        "tier": { "type": "string", "maxLength": 50 },
+        "savedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "projectId", "title", "tier", "savedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with academic track preferences"
+    },
+    "/users/{userId}/diagnostics/{diagnosticId}": {
+      "schema": "DiagnosticResult",
+      "description": "User diagnostic quiz attempts and misconception remediation"
+    },
+    "/users/{userId}/studyBlocks/{blockId}": {
+      "schema": "StudyBlock",
+      "description": "User timetable study blocks and pomodoro status"
+    },
+    "/users/{userId}/projectBookmarks/{bookmarkId}": {
+      "schema": "ProjectBookmark",
+      "description": "User saved and short-listed portfolio project blueprints"
+    }
+  }
+}

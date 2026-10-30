@@ -36,12 +36,15 @@ import { can, redactSensitiveInput } from "@/lib/security/policy";
 import type { UserRole } from "@/lib/security/contracts";
 import type { LearningState } from "@/lib/curriculum/types";
 import type { ToolCallReceipt } from "@/lib/mcp/contracts";
+import { BioscienceStudio } from "@/components/BioscienceStudio";
+import { auth, saveDiagnosticAttempt } from "@/lib/firebase";
 
 export const workspaces = [
   "Overview",
   "Quiz Lab",
   "Study Planner",
   "Project Explorer",
+  "Bioscience Studio",
   "Faculty View",
   "Institutional Tools",
 ] as const;
@@ -160,6 +163,15 @@ export function AcademicWorkspaces({
               if (topicId === "stats-bayes" && score >= 4) {
                 onMisconceptionResolved?.();
               }
+              if (auth.currentUser) {
+                saveDiagnosticAttempt(auth.currentUser.uid, {
+                  topic: topicId,
+                  score,
+                  total,
+                  percentage: pct,
+                  misconceptionsCleared: topicId === "stats-bayes" && score >= 4 ? 1 : 0,
+                }).catch((err) => console.warn("Firestore sync error:", err));
+              }
               onActivityLog?.(
                 `${topicId === "stats-bayes" ? "Bayesian inference" : "Regularization"} diagnostic`,
                 "Just now",
@@ -187,6 +199,9 @@ export function AcademicWorkspaces({
             onActivityLog={onActivityLog}
             onAskQuestion={onAskQuestion}
           />
+        )}
+        {workspace === "Bioscience Studio" && (
+          <BioscienceStudio />
         )}
         {workspace === "Faculty View" && (
           <FacultyViewPanel

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -11,10 +11,17 @@ import {
   ChevronRight,
   CircleHelp,
   Compass,
+  Database,
+  Dna,
+  ExternalLink,
   FlaskConical,
+  Globe,
   Library,
+  LogIn,
+  LogOut,
   Menu,
   MessageCircle,
+  Mic,
   Network,
   Sparkles,
   Target,
@@ -27,6 +34,10 @@ import {
 } from "@/lib/demo-data";
 import { curriculumGraph } from "@/lib/graph/curriculum";
 import { AcademicWorkspaces, type Workspace } from "@/components/AcademicWorkspaces";
+import { VoiceTutorModal } from "@/components/VoiceTutorModal";
+import { InteractiveLearningGraph } from "@/components/InteractiveLearningGraph";
+import { auth, signInWithGoogle, logOut, testConnection } from "@/lib/firebase";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import type { Evidence } from "@/lib/rag/contracts";
 import type { LearningState } from "@/lib/curriculum/types";
 
@@ -35,6 +46,7 @@ const navigation = [
   { label: "Study Studio", icon: BookOpen },
   { label: "Quiz Lab", icon: CircleHelp },
   { label: "Project Radar", icon: FlaskConical },
+  { label: "Bioscience Studio", icon: Dna },
   { label: "Institutional Tools", icon: Library },
 ];
 
@@ -63,6 +75,50 @@ export default function Home() {
   const [assistantConfidence, setAssistantConfidence] = useState<number | null>(null);
   const [isAsking, setIsAsking] = useState(false);
 
+  // Firebase Auth & Cloud Sync
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [dbConnected, setDbConnected] = useState(false);
+
+  // Gemini Live Voice Tutor
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+
+  // Google Search Grounding with gemini-3.8-flash
+  const [useSearchGrounding, setUseSearchGrounding] = useState(false);
+  const [groundedCitations, setGroundedCitations] = useState<{ title: string; uri: string }[]>([]);
+  const [searchQueries, setSearchQueries] = useState<string[]>([]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    testConnection().then((connected) => {
+      setDbConnected(connected);
+    });
+    return () => unsub();
+  }, []);
+
+  async function handleGoogleSignIn() {
+    setAuthLoading(true);
+    try {
+      const loggedInUser = await signInWithGoogle();
+      setUser(loggedInUser);
+    } catch (err) {
+      console.error("Sign in failed:", err);
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleSignOut() {
+    try {
+      await logOut();
+      setUser(null);
+    } catch (err) {
+      console.error("Sign out failed:", err);
+    }
+  }
+
   // Dynamic Learner State
   const [learner, setLearner] = useState<LearningState>(demoLearner);
   const [misconceptionAlert, setMisconceptionAlert] = useState<string>(
@@ -82,6 +138,8 @@ export default function Home() {
       ? "Project Explorer"
       : activeNav === "Study Studio"
       ? "Study Planner"
+      : activeNav === "Bioscience Studio"
+      ? "Bioscience Studio"
       : activeNav;
 
   function selectNavigation(label: string) {
@@ -137,6 +195,30 @@ export default function Home() {
     setAssistantReply("");
     setAgentTrace([]);
     setAssistantConfidence(null);
+    setGroundedCitations([]);
+    setSearchQueries([]);
+
+    if (useSearchGrounding) {
+      void fetch("/api/grounded-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: promptText, topic: learner.topics[0]?.topic }),
+      })
+        .then(async (response) => {
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Grounded search failed");
+          setAssistantReply(result.answer || "No synthesis available.");
+          setGroundedCitations(result.citations || []);
+          setSearchQueries(result.searchQueries || []);
+          setAgentTrace(["google-search-grounding", "gemini-3.8-flash"]);
+          setAssistantConfidence(0.96);
+        })
+        .catch((error: Error) => {
+          setAssistantReply(`Google Search Grounding error: ${error.message}`);
+        })
+        .finally(() => setIsAsking(false));
+      return;
+    }
 
     void fetch("/api/assistant", {
       method: "POST",
@@ -276,7 +358,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <section className="min-w-0 flex-1 px-5 py-5 sm:px-8 lg:px-12 lg:py-9">
-        <header className="flex items-center justify-between">
+        <header className="flex items-center justify-between gap-4">
           <button
             aria-label="Open navigation"
             className="lg:hidden"
@@ -288,13 +370,63 @@ export default function Home() {
             <span className="h-2 w-2 rounded-full bg-[var(--mint)]" />
             Atlas workspace <ChevronRight size={14} /> {activeNav}
           </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden text-xs text-[var(--muted)] sm:inline font-mono">
-              Chandigarh University · Term 4
-            </span>
+          <div className="flex items-center gap-3">
+            {/* Live Voice Tutor Button */}
+            <button
+              onClick={() => setVoiceModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition shadow-xs"
+              title="Launch Gemini Live Voice Tutor"
+            >
+              <Mic size={14} className="text-teal-400 animate-pulse" />
+              <span className="hidden sm:inline">Voice Tutor</span>
+              <span className="text-[10px] text-teal-300 font-mono px-1 rounded bg-teal-950/60">Live</span>
+            </button>
+
+            {/* Firebase Auth & Profile State */}
+            {user ? (
+              <div className="flex items-center gap-2 bg-white/70 border border-[var(--line)] rounded-full pl-2 pr-3 py-1">
+                {user.photoURL ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || "User"}
+                    className="w-6 h-6 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-[var(--cobalt)] text-white text-[10px] font-bold grid place-items-center">
+                    {user.displayName?.[0] || user.email?.[0] || "U"}
+                  </div>
+                )}
+                <div className="flex flex-col text-left">
+                  <span className="text-xs font-semibold max-w-[100px] truncate leading-tight">
+                    {user.displayName || "Scholar"}
+                  </span>
+                  <span className={`text-[9px] font-mono flex items-center gap-1 leading-tight ${dbConnected ? "text-emerald-600" : "text-amber-600"}`}>
+                    <Database size={8} /> {dbConnected ? "Firestore Synced" : "Local Mode"}
+                  </span>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  title="Sign out of Firebase"
+                  className="ml-1 text-slate-400 hover:text-slate-700 transition"
+                >
+                  <LogOut size={13} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={authLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[var(--line)] text-slate-700 text-xs font-semibold hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+              >
+                <LogIn size={13} className="text-[var(--cobalt)]" />
+                <span>{authLoading ? "Signing in..." : "Google Sign-In"}</span>
+              </button>
+            )}
+
             <div
               onClick={() => setShowLearnerSignalModal(true)}
-              className="grid h-9 w-9 place-items-center rounded-full bg-[var(--coral)] font-display text-sm text-white cursor-pointer hover:opacity-90"
+              className="grid h-9 w-9 place-items-center rounded-full bg-[var(--coral)] font-display text-sm text-white cursor-pointer hover:opacity-90 shrink-0"
               title="Aria Sharma - Student Profile"
             >
               AS
@@ -396,71 +528,31 @@ export default function Home() {
           <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_1.15fr]">
             {/* The Learning Graph Column */}
             <section className="reveal delay-2">
-              <div className="mb-6 flex items-end justify-between">
+              <div className="mb-4 flex items-end justify-between">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[var(--muted)]">
                     The learning graph
                   </p>
-                  <h2 className="mt-2 font-display text-3xl">Three topics in motion</h2>
+                  <h2 className="mt-2 font-display text-3xl">Curriculum Dependency Graph</h2>
                 </div>
                 <button
                   onClick={() => setShowGraphModal(true)}
                   className="text-xs font-semibold text-[var(--cobalt)] hover:underline flex items-center gap-1"
                 >
-                  View graph <ArrowUpRight size={14} />
+                  View hierarchy <ArrowUpRight size={14} />
                 </button>
               </div>
 
-              <div className="space-y-3">
-                {learner.topics.map((topic, index) => (
-                  <div
-                    key={topic.topicId}
-                    onClick={() => {
-                      executePrompt(`Give me a focused review and study recommendation for ${topic.topic}`);
-                    }}
-                    className="group flex cursor-pointer items-center gap-4 border-b border-[var(--line)] py-4 transition hover:bg-white/40 px-2 rounded-xl"
-                  >
-                    <div
-                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
-                        index === 0
-                          ? "bg-[var(--cobalt)] text-white"
-                          : index === 1
-                          ? "bg-[var(--coral)] text-white"
-                          : "bg-[var(--mint)]"
-                      }`}
-                    >
-                      <span className="font-mono text-xs">0{index + 1}</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="truncate text-sm font-semibold">{topic.topic}</h3>
-                        <span className="font-mono text-xs text-[var(--muted)]">
-                          {topic.mastery}%
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {topic.course} · {topic.nextAction}
-                      </p>
-                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--paper-deep)]">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            index === 0
-                              ? "bg-[var(--cobalt)]"
-                              : index === 1
-                              ? "bg-[var(--coral)]"
-                              : "bg-[var(--mint)]"
-                          }`}
-                          style={{ width: `${topic.mastery}%` }}
-                        />
-                      </div>
-                    </div>
-                    <ChevronRight
-                      size={17}
-                      className="text-[var(--muted)] transition group-hover:translate-x-1"
-                    />
-                  </div>
-                ))}
-              </div>
+              <InteractiveLearningGraph
+                learner={learner}
+                onSelectTopicPrompt={(prompt) => executePrompt(prompt)}
+                onStartQuizTopic={() => {
+                  selectNavigation("Quiz Lab");
+                }}
+                onOpenVoiceTutor={() => {
+                  setVoiceModalOpen(true);
+                }}
+              />
             </section>
 
             {/* Ask CampusGenie Column */}
@@ -472,16 +564,48 @@ export default function Home() {
                   </p>
                   <h2 className="mt-2 font-display text-3xl">What are you working through?</h2>
                 </div>
-                <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-[var(--mint)]" /> Gemini live
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-[var(--mint)]" /> Gemini live
+                  </span>
+                </div>
+              </div>
+
+              {/* Mode Selection Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setUseSearchGrounding(!useSearchGrounding)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition flex items-center gap-1.5 ${
+                    useSearchGrounding
+                      ? "bg-teal-50 text-teal-800 border-teal-300 font-semibold shadow-xs"
+                      : "bg-white/80 text-slate-600 border-[var(--line)] hover:bg-white"
+                  }`}
+                >
+                  <Globe size={13} className={useSearchGrounding ? "text-teal-600" : "text-slate-400"} />
+                  <span>Google Search Grounding (Live Citations)</span>
+                  {useSearchGrounding && <span className="h-2 w-2 rounded-full bg-teal-500 animate-pulse" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVoiceModalOpen(true)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200"
+                >
+                  <Mic size={13} className="text-teal-600" />
+                  <span>Voice Tutor Mode</span>
+                </button>
               </div>
 
               <form onSubmit={submitPrompt} className="relative">
                 <textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  placeholder="e.g. Show me why the prior matters in this problem..."
+                  placeholder={
+                    useSearchGrounding
+                      ? "Search recent academic research, syllabus updates, or peer-reviewed literature..."
+                      : "e.g. Show me why the prior matters in this problem..."
+                  }
                   className="h-32 w-full resize-none rounded-2xl border border-[var(--line)] bg-white/60 p-5 text-sm leading-6 outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--cobalt)] shadow-xs"
                 />
                 <button
@@ -498,20 +622,55 @@ export default function Home() {
               </form>
 
               {isAsking && (
-                <div className="mt-3 text-xs text-[var(--cobalt)] animate-pulse">
-                  CampusGenie is mapping your question to curriculum evidence with Gemini...
+                <div className="mt-3 text-xs text-[var(--cobalt)] animate-pulse flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[var(--cobalt)] animate-ping" />
+                  <span>
+                    {useSearchGrounding
+                      ? "Grounding query against live Google Search results with gemini-3.8-flash..."
+                      : "CampusGenie is mapping your question to curriculum evidence with Gemini..."}
+                  </span>
                 </div>
               )}
 
               {sent && !isAsking && (
                 <div className="mt-3 flex items-center gap-2 text-xs text-[var(--cobalt)]">
-                  <Check size={14} /> Processed through curriculum agent pipeline.
+                  <Check size={14} /> Processed through {useSearchGrounding ? "grounded search pipeline" : "curriculum agent pipeline"}.
                 </div>
               )}
 
               {assistantReply && (
                 <div className="mt-4 whitespace-pre-line rounded-2xl bg-[var(--paper-deep)] p-5 text-sm leading-relaxed border border-[var(--line)] shadow-xs">
                   <p>{assistantReply}</p>
+
+                  {/* Grounded Web Citations */}
+                  {groundedCitations.length > 0 && (
+                    <div className="mt-4 border-t border-[var(--line)] pt-3 space-y-2">
+                      <div className="text-[11px] font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <Globe size={13} className="text-teal-600" />
+                        Live Grounded Web Citations ({groundedCitations.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {groundedCitations.map((citation, idx) => (
+                          <a
+                            key={idx}
+                            href={citation.uri}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-md text-[11px] text-teal-800 flex items-center gap-1 transition"
+                          >
+                            <span className="truncate max-w-[200px]">{citation.title}</span>
+                            <ExternalLink size={10} className="shrink-0 text-slate-400" />
+                          </a>
+                        ))}
+                      </div>
+                      {searchQueries.length > 0 && (
+                        <div className="text-[10px] text-slate-500 font-mono pt-1">
+                          Google queries executed: {searchQueries.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {agentTrace.length > 0 && (
                     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-3">
                       <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
@@ -981,6 +1140,13 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* 6. Gemini Live Voice Tutor Modal */}
+      <VoiceTutorModal
+        isOpen={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        activeTopic={bayesTopic?.topic}
+      />
     </main>
   );
 }
