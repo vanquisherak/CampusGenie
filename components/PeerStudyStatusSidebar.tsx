@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Users,
   X,
-  Sparkles,
   Mic,
   Radio,
   BookOpen,
@@ -18,7 +17,9 @@ import {
   ArrowRight,
   ShieldCheck,
   Search,
+  MessageSquare,
 } from "lucide-react";
+import type { PeerChatRoomData } from "./PeerStudyChatRoomModal";
 
 export type PeerStatus = "available" | "focus" | "voice" | "seeking" | "break";
 
@@ -54,6 +55,7 @@ interface PeerStudyStatusSidebarProps {
   currentWorkspace: string;
   onSelectPrompt: (prompt: string) => void;
   onOpenVoiceTutor?: (topicName: string) => void;
+  onOpenChatRoom?: (room: PeerChatRoomData) => void;
 }
 
 // Mock Peer Data Indexed by Workspace
@@ -430,12 +432,186 @@ const STUDY_PODS: Record<string, StudyPod[]> = {
   ],
 };
 
+export function createPeerChatRoomData(peer: ClassmatePeer): PeerChatRoomData {
+  const isCUIMS = peer.workspace === "CUIMS Student Hub";
+  const isQuiz = peer.workspace === "Quiz Lab";
+  const isProject = peer.workspace === "Project Radar";
+
+  return {
+    id: `room-${peer.id}`,
+    title: `Live Study Session with ${peer.name}`,
+    workspace: peer.workspace,
+    topic: peer.currentTask,
+    peers: [
+      {
+        name: peer.name,
+        initials: peer.initials,
+        avatarBg: peer.avatarBg,
+        branch: peer.branch,
+        status: peer.statusText,
+      },
+    ],
+    initialMessages: [
+      {
+        id: `m1-${peer.id}`,
+        sender: "peer",
+        senderName: peer.name,
+        senderInitials: peer.initials,
+        avatarBg: peer.avatarBg,
+        content: `Hey! Glad you joined. I'm actively working through "${peer.currentTask}". In the latest exam problem set, there are a few tricky nuances—let's solve them together!`,
+        timestamp: "3m ago",
+      },
+      {
+        id: `m2-${peer.id}`,
+        sender: "ai",
+        senderName: "CampusGenie AI",
+        content: `💡 **CampusGenie Co-Pilot**: Welcome to the study room! I've loaded the curriculum evidence for **${peer.workspace}**. Mention me anytime with \`@CampusGenie\` or use the quick buttons below to fact-check your steps or run a group diagnostic.`,
+        timestamp: "1m ago",
+        badge: "AI Co-Pilot",
+        highlight: true,
+      },
+    ],
+    keyFormulas: isCUIMS
+      ? [
+          {
+            label: "CUIMS Official 75% Attendance Formula",
+            formula: "C = 3D - 4A  (Target 75% threshold)",
+            explanation: "D = Total Deliveries, A = Total Attended. Bunks available B = floor((4A - 3D)/3).",
+          },
+          {
+            label: "CPU Turnaround & Waiting Time",
+            formula: "Turnaround = Completion - Arrival | Waiting = Turnaround - Burst",
+            explanation: "Essential for Operating Systems CPU scheduling calculations.",
+          },
+        ]
+      : isQuiz
+      ? [
+          {
+            label: "Bayes Rule Expansion",
+            formula: "P(A|B) = [P(B|A) · P(A)] / P(B)",
+            explanation: "P(B) = P(B|A)P(A) + P(B|~A)P(~A) via Law of Total Probability.",
+          },
+          {
+            label: "L1 vs L2 Regularization",
+            formula: "L1: ||w||_1 (Lasso Sparsity) | L2: ||w||_2^2 (Ridge Shrinkage)",
+            explanation: "L1 produces exact zeros due to diamond contours intersecting axis lines.",
+          },
+        ]
+      : isProject
+      ? [
+          {
+            label: "Raft Quorum Election Condition",
+            formula: "Quorum = floor(N / 2) + 1  (Strict Majority)",
+            explanation: "Ensures at most one leader can be elected in any given term.",
+          },
+          {
+            label: "Cache Invalidation Race Window",
+            formula: "T_invalidation < T_db_commit (Anti-pattern: evict before commit)",
+            explanation: "Always evict cache after DB transaction commits to prevent stale repopulation.",
+          },
+        ]
+      : [
+          {
+            label: "Scaled Dot-Product Attention",
+            formula: "Attention(Q,K,V) = softmax(Q K^T / sqrt(d_k)) V",
+            explanation: "Dividing by sqrt(d_k) preserves unit variance and prevents vanishing gradients.",
+          },
+        ],
+    groupChallenge: {
+      question: isCUIMS
+        ? "If a student has attended 32 lectures out of 40 delivered, what is their exact allowable bunks before dropping below 75%?"
+        : isQuiz
+        ? "Given disease prior P(D)=0.01, test sensitivity P(+|D)=0.95, and false positive P(+|~D)=0.05. Is P(D|+) closer to 16% or 95%?"
+        : isProject
+        ? "In a 5-node distributed cluster running Raft, what is the maximum number of simultaneous node failures the cluster can tolerate while maintaining quorum?"
+        : "In Transformer self-attention with d_model=512 and h=8 heads, what is the dimension d_k of each individual head key vector?",
+      options: isCUIMS
+        ? ["0 bunks", "2 bunks", "4 bunks", "5 bunks"]
+        : isQuiz
+        ? ["16% (base-rate dominant)", "50% (equal weight)", "95% (test accuracy)", "99% (high confidence)"]
+        : isProject
+        ? ["1 node", "2 nodes", "3 nodes", "4 nodes"]
+        : ["32", "64", "128", "256"],
+      correctIndex: isCUIMS ? 1 : isQuiz ? 0 : isProject ? 1 : 1,
+      explanation: isCUIMS
+        ? "B = floor((4*32 - 3*40)/3) = floor((128 - 120)/3) = floor(8/3) = 2 bunks."
+        : isQuiz
+        ? "P(D|+) = (0.95 * 0.01) / [(0.95*0.01) + (0.05*0.99)] = 0.0095 / (0.0095 + 0.0495) = 0.0095 / 0.059 ~ 16.1%."
+        : isProject
+        ? "Quorum for 5 nodes requires 3 alive. Thus at most 5 - 3 = 2 node failures can be tolerated."
+        : "d_k = d_model / h = 512 / 8 = 64.",
+    },
+  };
+}
+
+export function createPodChatRoomData(pod: StudyPod): PeerChatRoomData {
+  return {
+    id: `pod-room-${pod.id}`,
+    title: pod.title,
+    workspace: pod.workspace,
+    topic: pod.topic,
+    peers: [
+      { name: "Rohan Sharma", initials: "RS", avatarBg: "bg-blue-600", branch: "B.Tech CSE", status: "Host" },
+      { name: "Simran Kaur", initials: "SK", avatarBg: "bg-purple-600", branch: "AI & ML", status: "Active" },
+      { name: "Aarav Patel", initials: "AP", avatarBg: "bg-teal-600", branch: "Cloud", status: "Active" },
+    ],
+    initialMessages: [
+      {
+        id: `pm1-${pod.id}`,
+        sender: "peer",
+        senderName: "Rohan Sharma",
+        senderInitials: "RS",
+        avatarBg: "bg-blue-600",
+        content: `Welcome to the ${pod.title}! We're currently breaking down: "${pod.topic}". Let's solve the key exam problems together!`,
+        timestamp: "4m ago",
+      },
+      {
+        id: `pm2-${pod.id}`,
+        sender: "peer",
+        senderName: "Simran Kaur",
+        senderInitials: "SK",
+        avatarBg: "bg-purple-600",
+        content: `I've got the syllabus notes open. Should we ask @CampusGenie to run a 3-question diagnostic on this topic for the room?`,
+        timestamp: "2m ago",
+      },
+      {
+        id: `pm3-${pod.id}`,
+        sender: "ai",
+        senderName: "CampusGenie AI",
+        content: `💡 **CampusGenie Co-Pilot**: Study pod initialized! I'm monitoring the room and ready to clarify concepts, fact-check arguments, or solve problems. What specific question is the group tackling first?`,
+        timestamp: "1m ago",
+        badge: "AI Co-Pilot",
+        highlight: true,
+      },
+    ],
+    keyFormulas: [
+      {
+        label: "Core Pod Study Formula",
+        formula: "Focus Efficiency = (Solved Verification Questions) / (Active Sprint Hours)",
+        explanation: "Collaborative peer practice increases exam retention by 3.4x over passive reading.",
+      },
+    ],
+    groupChallenge: {
+      question: `In ${pod.topic}, what is the most frequent misconception identified by the curriculum engine?`,
+      options: [
+        "Confusing prior probability with likelihood",
+        "Assuming zero latency under concurrent RPC writes",
+        "Overfitting due to absence of regularization constraints",
+        "All of the above depending on the module domain",
+      ],
+      correctIndex: 3,
+      explanation: "Each curriculum module possesses a signature cognitive misconception tracked in the student learning graph.",
+    },
+  };
+}
+
 export function PeerStudyStatusSidebar({
   isOpen,
   onClose,
   currentWorkspace,
   onSelectPrompt,
   onOpenVoiceTutor,
+  onOpenChatRoom,
 }: PeerStudyStatusSidebarProps) {
   // Map navigation labels to workspace keys
   const resolvedWorkspaceKey = useMemo(() => {
@@ -732,13 +908,17 @@ export function PeerStudyStatusSidebar({
                         <div className="flex items-center gap-2 pt-1 border-t border-rose-100">
                           <button
                             onClick={() => {
-                              onSelectPrompt(pod.prompt);
+                              if (onOpenChatRoom) {
+                                onOpenChatRoom(createPodChatRoomData(pod));
+                              } else {
+                                onSelectPrompt(pod.prompt);
+                              }
                               onClose();
                             }}
                             className="flex-1 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
                           >
-                            <Sparkles size={11} className="text-teal-400" />
-                            <span>Join Pod Discussion</span>
+                            <MessageSquare size={12} className="text-teal-400" />
+                            <span>Join Live Discussion Room</span>
                           </button>
 
                           {onOpenVoiceTutor && (
@@ -900,14 +1080,18 @@ export function PeerStudyStatusSidebar({
                           <div className="flex items-center gap-1.5 pt-0.5">
                             <button
                               onClick={() => {
-                                onSelectPrompt(peer.suggestedPrompt);
+                                if (onOpenChatRoom) {
+                                  onOpenChatRoom(createPeerChatRoomData(peer));
+                                } else {
+                                  onSelectPrompt(peer.suggestedPrompt);
+                                }
                                 onClose();
                               }}
                               className="flex-1 py-1.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
-                              title="Ask CampusGenie to pair study on this topic"
+                              title="Open live peer study room with this classmate & CampusGenie"
                             >
-                              <Sparkles size={11} className="text-teal-400" />
-                              <span>Pair in CampusGenie</span>
+                              <MessageSquare size={11} className="text-teal-400" />
+                              <span>Live Peer Chat Room</span>
                             </button>
 
                             <button

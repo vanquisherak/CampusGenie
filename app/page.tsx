@@ -42,6 +42,10 @@ import { InteractiveLearningGraph } from "@/components/InteractiveLearningGraph"
 import { FuturisticOmniSearch } from "@/components/FuturisticOmniSearch";
 import { FuturisticCommandDeck } from "@/components/FuturisticCommandDeck";
 import { PeerStudyStatusSidebar } from "@/components/PeerStudyStatusSidebar";
+import {
+  PeerStudyChatRoomModal,
+  type PeerChatRoomData,
+} from "@/components/PeerStudyChatRoomModal";
 import { auth, signInWithGoogle, logOut, testConnection } from "@/lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import type { Evidence } from "@/lib/rag/contracts";
@@ -90,8 +94,9 @@ export default function Home() {
   // Gemini Live Voice Tutor
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
 
-  // Peer Study Status Sidebar
+  // Peer Study Status Sidebar & Live Chat Room
   const [peerSidebarOpen, setPeerSidebarOpen] = useState(false);
+  const [activePeerChatRoom, setActivePeerChatRoom] = useState<PeerChatRoomData | null>(null);
 
   // Google Search Grounding with gemini-3.8-flash
   const [useSearchGrounding, setUseSearchGrounding] = useState(false);
@@ -1402,6 +1407,17 @@ export default function Home() {
         onClose={() => setPeerSidebarOpen(false)}
         currentWorkspace={activeNav}
         onSelectPrompt={(prompt) => executePrompt(prompt)}
+        onOpenVoiceTutor={() => {
+          setVoiceModalOpen(true);
+        }}
+        onOpenChatRoom={(room) => setActivePeerChatRoom(room)}
+      />
+
+      {/* 9. Live Peer Study Chat Room Modal */}
+      <PeerStudyChatRoomModal
+        isOpen={Boolean(activePeerChatRoom)}
+        roomData={activePeerChatRoom}
+        onClose={() => setActivePeerChatRoom(null)}
         onOpenVoiceTutor={() => {
           setVoiceModalOpen(true);
         }}
