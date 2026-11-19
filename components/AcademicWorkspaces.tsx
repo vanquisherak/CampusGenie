@@ -41,7 +41,15 @@ import type { UserRole } from "@/lib/security/contracts";
 import type { LearningState } from "@/lib/curriculum/types";
 import type { ToolCallReceipt } from "@/lib/mcp/contracts";
 import { BioscienceStudio } from "@/components/BioscienceStudio";
-import { auth, saveDiagnosticAttempt, saveStudyBlock } from "@/lib/firebase";
+import type { User } from "firebase/auth";
+import {
+  auth,
+  saveDiagnosticAttempt,
+  saveStudyBlock,
+  subscribeToStudyBlocks,
+  subscribeToProjectBookmarks,
+  toggleProjectBookmark,
+} from "@/lib/firebase";
 import {
   INITIAL_STUDY_SESSIONS,
   PRESET_BLUEPRINTS,
@@ -73,6 +81,7 @@ export function AcademicWorkspaces({
   onMisconceptionResolved,
   onActivityLog,
   currentLearner,
+  user,
 }: {
   requestedWorkspace?: Workspace;
   onStatus?: (message: string) => void;
@@ -81,6 +90,7 @@ export function AcademicWorkspaces({
   onMisconceptionResolved?: () => void;
   onActivityLog?: (title: string, meta: string, status: string, color: string) => void;
   currentLearner?: LearningState;
+  user?: User | null;
 }) {
   const [workspace, setWorkspace] = useState<Workspace>(requestedWorkspace ?? "Overview");
   const [notice, setNotice] = useState("Choose a workspace to begin your active session.");
@@ -195,6 +205,7 @@ export function AcademicWorkspaces({
             onActivityLog={onActivityLog}
             onAction={updateNotice}
             onAskQuestion={onAskQuestion}
+            user={user}
           />
         )}
         {workspace === "Project Explorer" && (
@@ -202,6 +213,7 @@ export function AcademicWorkspaces({
             onAction={updateNotice}
             onActivityLog={onActivityLog}
             onAskQuestion={onAskQuestion}
+            user={user}
           />
         )}
         {workspace === "Bioscience Studio" && (
@@ -784,10 +796,12 @@ function StudyPlannerPanel({
   onActivityLog,
   onAction,
   onAskQuestion,
+  user,
 }: {
   onActivityLog?: (title: string, meta: string, status: string, color: string) => void;
   onAction: (message: string) => void;
   onAskQuestion?: (prompt: string) => void;
+  user?: User | null;
 }) {
   const [sessions, setSessions] = useState<StudySession[]>(INITIAL_STUDY_SESSIONS);
   const [selectedBlueprintSession, setSelectedBlueprintSession] = useState<StudySession | null>(null);
@@ -796,6 +810,50 @@ function StudyPlannerPanel({
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isAiGeneratingPlan, setIsAiGeneratingPlan] = useState(false);
   const [filter, setFilter] = useState<"all" | "in-progress" | "completed">("all");
+
+  // Hydrate study blocks from Firestore when verified user is signed in
+  const verifiedUid = user?.uid && user.emailVerified ? user.uid : null;
+  useEffect(() => {
+    if (!verifiedUid) return;
+    const unsub = subscribeToStudyBlocks(verifiedUid, (remoteBlocks) => {
+      if (remoteBlocks.length === 0) return;
+      setSessions((prev) => {
+        const merged = [...prev];
+        for (const rb of remoteBlocks) {
+          const existingIdx = merged.findIndex(
+            (s) => s.id === rb.id || s.title.toLowerCase() === rb.title.toLowerCase()
+          );
+          const nextStatus: StudySession["status"] = rb.completed
+            ? "completed"
+            : rb.status === "in-progress"
+            ? "in-progress"
+            : "not-started";
+          if (existingIdx >= 0) {
+            const target = merged[existingIdx];
+            merged[existingIdx] = {
+              ...target,
+              id: rb.id,
+              status: nextStatus,
+              durationMinutes: rb.durationMin || target.durationMinutes,
+            };
+          } else {
+            merged.unshift({
+              id: rb.id,
+              day: "Synced",
+              title: rb.title,
+              course: rb.course || "General",
+              durationMinutes: rb.durationMin || 30,
+              status: nextStatus,
+              focusNotes: rb.blueprintGoal || rb.notes || "Synced from Firestore study schedule.",
+              color: "bg-[var(--cobalt)]",
+            });
+          }
+        }
+        return merged;
+      });
+    });
+    return () => unsub();
+  }, [verifiedUid]);
 
   // Add Block Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -852,6 +910,18 @@ function StudyPlannerPanel({
             `${s.durationMinutes} min completed`,
             "bg-[var(--cobalt)]"
           );
+          if (auth.currentUser && auth.currentUser.emailVerified) {
+            saveStudyBlock(auth.currentUser.uid, {
+              id: s.id,
+              title: s.title,
+              course: s.course,
+              durationMinutes: s.durationMinutes,
+              status: "completed",
+              completed: true,
+              blueprintGoal: s.blueprint?.biggerGoal || s.focusNotes,
+              lastUpdated: new Date().toISOString(),
+            }).catch(() => {});
+          }
           return { ...s, status: "completed" };
         }
         return s;
@@ -883,14 +953,17 @@ function StudyPlannerPanel({
           setSelectedBlueprintSession(updatedSession);
         }
 
-        if (auth.currentUser) {
+        if (auth.currentUser && auth.currentUser.emailVerified) {
           saveStudyBlock(auth.currentUser.uid, {
+            id: updatedSession.id,
             title: updatedSession.title,
             course: updatedSession.course,
             durationMinutes: updatedSession.durationMinutes,
             status: updatedSession.status,
+            completed: allCompleted,
             microStepsCount: updatedSteps.length,
             completedStepsCount: updatedSteps.filter((s) => s.completed).length,
+            blueprintGoal: updatedSession.blueprint?.biggerGoal,
             lastUpdated: new Date().toISOString(),
           }).catch(() => {});
         }
@@ -1059,12 +1132,14 @@ function StudyPlannerPanel({
     setAiGeneratedBlueprint(null);
     setSelectedBlueprintSession(newBlock);
     onAction(`Added AI Blueprint block: "${newBlock.title}".`);
-    if (auth.currentUser) {
+    if (auth.currentUser && auth.currentUser.emailVerified) {
       saveStudyBlock(auth.currentUser.uid, {
+        id: newBlock.id,
         title: newBlock.title,
         course: newBlock.course,
         durationMinutes: newBlock.durationMinutes,
         status: newBlock.status,
+        completed: false,
         blueprintGoal: newBlock.blueprint?.biggerGoal,
       }).catch(() => {});
     }
@@ -1108,12 +1183,14 @@ function StudyPlannerPanel({
     setShowAddModal(false);
     setSelectedBlueprintSession(newBlock);
     onAction(`Added Subject Blueprint: "${newBlock.title}" with YouTube lessons.`);
-    if (auth.currentUser) {
+    if (auth.currentUser && auth.currentUser.emailVerified) {
       saveStudyBlock(auth.currentUser.uid, {
+        id: newBlock.id,
         title: newBlock.title,
         course: newBlock.course,
         durationMinutes: newBlock.durationMinutes,
         status: newBlock.status,
+        completed: false,
         blueprintGoal: newBlock.blueprint?.biggerGoal,
       }).catch(() => {});
     }
@@ -1185,12 +1262,14 @@ function StudyPlannerPanel({
     setSelectedBlueprintSession(newBlock);
     onAction(`Added custom blueprint: "${newBlock.title}".`);
 
-    if (auth.currentUser) {
+    if (auth.currentUser && auth.currentUser.emailVerified) {
       saveStudyBlock(auth.currentUser.uid, {
+        id: newBlock.id,
         title: newBlock.title,
         course: newBlock.course,
         durationMinutes: newBlock.durationMinutes,
         status: newBlock.status,
+        completed: false,
         blueprintGoal: newBlock.blueprint?.biggerGoal,
       }).catch(() => {});
     }
@@ -1881,16 +1960,29 @@ function ProjectExplorerPanel({
   onAction,
   onActivityLog,
   onAskQuestion,
+  user,
 }: {
   onAction: (message: string) => void;
   onActivityLog?: (title: string, meta: string, status: string, color: string) => void;
   onAskQuestion?: (prompt: string) => void;
+  user?: User | null;
 }) {
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [selectedBlueprint, setSelectedBlueprint] = useState<CapstoneProject | null>(null);
   const [shortlistedIds, setShortlistedIds] = useState<string[]>(["proj-energy"]);
   const [customPrompt, setCustomPrompt] = useState("");
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+
+  const verifiedUid = user?.uid && user.emailVerified ? user.uid : null;
+  useEffect(() => {
+    if (!verifiedUid) return;
+    const unsub = subscribeToProjectBookmarks(verifiedUid, (bookmarks) => {
+      if (bookmarks.length > 0) {
+        setShortlistedIds(bookmarks.map((b) => b.projectId));
+      }
+    });
+    return () => unsub();
+  }, [verifiedUid]);
 
   function toggleShortlist(proj: CapstoneProject) {
     const isAlready = shortlistedIds.includes(proj.id);
@@ -1901,6 +1993,13 @@ function ProjectExplorerPanel({
       setShortlistedIds((prev) => [...prev, proj.id]);
       onActivityLog?.(`Shortlisted project: ${proj.title}`, "Just now", `${proj.fitScore}`, "bg-[var(--cobalt)]");
       onAction(`Added ${proj.title} to your capstone radar shortlist.`);
+    }
+    if (verifiedUid) {
+      toggleProjectBookmark(
+        verifiedUid,
+        { id: proj.id, title: proj.title, tier: proj.difficulty },
+        isAlready
+      ).catch(() => {});
     }
   }
 

@@ -28,8 +28,11 @@ import {
   Users,
   X,
   GraduationCap,
+  FileText,
+  RotateCcw,
 } from "lucide-react";
 import { motion } from "motion/react";
+import Markdown from "react-markdown";
 import {
   demoEvidence,
   demoLearner,
@@ -46,10 +49,37 @@ import {
   PeerStudyChatRoomModal,
   type PeerChatRoomData,
 } from "@/components/PeerStudyChatRoomModal";
-import { auth, signInWithGoogle, logOut, testConnection } from "@/lib/firebase";
+import { NotesRagPanel } from "@/components/NotesRagPanel";
+import {
+  auth,
+  signInWithGoogle,
+  logOut,
+  testConnection,
+  subscribeToLearnerProgress,
+  saveLearnerProgress,
+  subscribeToActivities,
+  saveActivityEntry,
+  subscribeToStudyNotes,
+  saveStudyNote,
+  deleteStudyNote,
+} from "@/lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import type { Evidence } from "@/lib/rag/contracts";
-import type { LearningState } from "@/lib/curriculum/types";
+import type { StudyNote, RetrievedSource } from "@/lib/rag/retriever";
+import type { LearningState, MasteryBand } from "@/lib/curriculum/types";
+
+interface ChatTurn {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  streaming?: boolean;
+  sources?: RetrievedSource[];
+  agentsUsed?: string[];
+  confidence?: number | null;
+  groundedCitations?: { title: string; uri: string }[];
+  searchQueries?: string[];
+  mode?: "rag-stream" | "grounded-search";
+}
 
 const navigation = [
   { label: "Overview", icon: Compass },
@@ -82,9 +112,12 @@ export default function Home() {
   const [sent, setSent] = useState(false);
   const [activeNav, setActiveNav] = useState("Overview");
   const [assistantReply, setAssistantReply] = useState("");
-  const [agentTrace, setAgentTrace] = useState<string[]>([]);
-  const [assistantConfidence, setAssistantConfidence] = useState<number | null>(null);
   const [isAsking, setIsAsking] = useState(false);
+
+  // Multi-turn streaming chat & PDF Notes RAG
+  const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
+  const [studyNotes, setStudyNotes] = useState<StudyNote[]>([]);
+  const [useNotesInRag, setUseNotesInRag] = useState(true);
 
   // Firebase Auth & Cloud Sync
   const [user, setUser] = useState<User | null>(null);
@@ -100,8 +133,6 @@ export default function Home() {
 
   // Google Search Grounding with gemini-3.8-flash
   const [useSearchGrounding, setUseSearchGrounding] = useState(false);
-  const [groundedCitations, setGroundedCitations] = useState<{ title: string; uri: string }[]>([]);
-  const [searchQueries, setSearchQueries] = useState<string[]>([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
@@ -140,6 +171,47 @@ export default function Home() {
     "One misconception detected: prior probability vs likelihood."
   );
   const [activityList, setActivityList] = useState<ActivityItem[]>(initialActivity);
+
+  // Hydrate full learner state, activity receipts, and uploaded study notes from Firestore
+  const verifiedUid = user?.uid && user.emailVerified ? user.uid : null;
+  useEffect(() => {
+    if (!verifiedUid) return;
+
+    const unsubProgress = subscribeToLearnerProgress(verifiedUid, (progress) => {
+      if (progress && Array.isArray(progress.topics) && progress.topics.length > 0) {
+        setLearner((prev) => ({ ...prev, topics: progress.topics }));
+        const bayes = progress.topics.find((t) => t.topicId === "stats-bayes");
+        if (bayes && !bayes.misconception) {
+          setMisconceptionAlert("Misconception resolved: Prior probability vs Likelihood verified.");
+        }
+      }
+    });
+
+    const unsubActivities = subscribeToActivities(verifiedUid, (items) => {
+      if (items.length > 0) {
+        setActivityList(
+          items.map((it) => ({
+            id: it.id,
+            title: it.title,
+            meta: it.meta,
+            status: it.status,
+            color: it.color,
+            details: it.details,
+          }))
+        );
+      }
+    });
+
+    const unsubNotes = subscribeToStudyNotes(verifiedUid, (notes) => {
+      setStudyNotes(notes);
+    });
+
+    return () => {
+      unsubProgress();
+      unsubActivities();
+      unsubNotes();
+    };
+  }, [verifiedUid]);
 
   // Modals
   const [showOutcomesModal, setShowOutcomesModal] = useState(false);
@@ -210,8 +282,9 @@ export default function Home() {
   }
 
   function handleLogActivity(title: string, meta: string, status: string, color: string) {
+    const id = `act-${Date.now()}`;
     const newItem: ActivityItem = {
-      id: `act-${Date.now()}`,
+      id,
       title,
       meta,
       status,
@@ -219,107 +292,269 @@ export default function Home() {
       details: "Recorded from active workspace session.",
     };
     setActivityList((prev) => [newItem, ...prev]);
+    if (verifiedUid) {
+      saveActivityEntry(verifiedUid, {
+        id,
+        title,
+        meta,
+        status,
+        color,
+        details: newItem.details,
+      }).catch(() => {});
+    }
   }
 
   function handleMasteryChange(topicId: string, gain: number) {
-    setLearner((prev) => ({
-      ...prev,
-      topics: prev.topics.map((t) =>
-        t.topicId === topicId
-          ? {
-              ...t,
-              mastery: Math.min(100, t.mastery + gain),
-              band: t.mastery + gain >= 80 ? "ready" : "developing",
-            }
-          : t
-      ),
-    }));
+    setLearner((prev) => {
+      const nextTopics = prev.topics.map((t) => {
+        if (t.topicId !== topicId) return t;
+        const nextMastery = Math.min(100, t.mastery + gain);
+        const nextBand: MasteryBand = nextMastery >= 80 ? "ready" : "developing";
+        return {
+          ...t,
+          mastery: nextMastery,
+          band: nextBand,
+        };
+      });
+      if (verifiedUid) {
+        saveLearnerProgress(verifiedUid, nextTopics).catch(() => {});
+      }
+      return { ...prev, topics: nextTopics };
+    });
   }
 
   function handleMisconceptionResolved() {
-    setLearner((prev) => ({
-      ...prev,
-      topics: prev.topics.map((t) =>
+    setLearner((prev) => {
+      const nextTopics = prev.topics.map((t) =>
         t.topicId === "stats-bayes" ? { ...t, misconception: undefined } : t
-      ),
-    }));
+      );
+      if (verifiedUid) {
+        saveLearnerProgress(verifiedUid, nextTopics, ["bayes-prior-vs-likelihood"]).catch(() => {});
+      }
+      return { ...prev, topics: nextTopics };
+    });
     setMisconceptionAlert("Misconception resolved: Prior probability vs Likelihood verified.");
   }
 
-  function executePrompt(promptText: string) {
-    if (!promptText.trim()) return;
-    setMessage(promptText);
+  function handleNoteAdded(note: StudyNote) {
+    setStudyNotes((prev) => [note, ...prev.filter((n) => n.id !== note.id)]);
+    if (verifiedUid) {
+      saveStudyNote(verifiedUid, note).catch(() => {});
+    }
+    handleLogActivity(
+      `Indexed RAG Note: ${note.title}`,
+      "Just now",
+      `${note.chunkCount} chunks`,
+      "bg-[var(--mint)]"
+    );
+  }
+
+  function handleNoteDeleted(noteId: string) {
+    setStudyNotes((prev) => prev.filter((n) => n.id !== noteId));
+    if (verifiedUid) {
+      deleteStudyNote(verifiedUid, noteId).catch(() => {});
+    }
+  }
+
+  async function handleSaveSummaryNote(title: string, course: string, text: string) {
+    try {
+      const res = await fetch("/api/notes/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          course,
+          fileName: "peer-room-takeaways.md",
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.note) {
+        handleNoteAdded(data.note as StudyNote);
+      }
+    } catch {
+      // ignore background error
+    }
+  }
+
+  async function executePrompt(promptText: string) {
+    const cleanPrompt = promptText.trim();
+    if (!cleanPrompt) return;
+
+    setMessage("");
     setSent(true);
     setIsAsking(true);
     setAssistantReply("");
-    setAgentTrace([]);
-    setAssistantConfidence(null);
-    setGroundedCitations([]);
-    setSearchQueries([]);
 
-    // Automatically redirect/scroll to Ask CampusGenie where results are displayed
     if (typeof window !== "undefined") {
       window.requestAnimationFrame(() => {
         document.getElementById("ask-campusgenie")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
 
+    const userTurnId = `turn-u-${Date.now()}`;
+    const aiTurnId = `turn-a-${Date.now() + 1}`;
+    const priorHistory = chatTurns
+      .filter((t) => !t.streaming && t.content.trim())
+      .slice(-8)
+      .map((t) => ({
+        role: t.role === "user" ? ("user" as const) : ("model" as const),
+        text: t.content,
+      }));
+
+    setChatTurns((prev) => [
+      ...prev,
+      { id: userTurnId, role: "user", content: cleanPrompt },
+      {
+        id: aiTurnId,
+        role: "assistant",
+        content: "",
+        streaming: true,
+        mode: useSearchGrounding ? "grounded-search" : "rag-stream",
+      },
+    ]);
+
     if (useSearchGrounding) {
-      void fetch("/api/grounded-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: promptText, topic: learner.topics[0]?.topic }),
-      })
-        .then(async (response) => {
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || "Grounded search failed");
-          setAssistantReply(result.answer || "No synthesis available.");
-          setGroundedCitations(result.citations || []);
-          setSearchQueries(result.searchQueries || []);
-          setAgentTrace(["google-search-grounding", "gemini-3.8-flash"]);
-          setAssistantConfidence(0.96);
-        })
-        .catch((error: Error) => {
-          setAssistantReply(`Google Search Grounding error: ${error.message}`);
-        })
-        .finally(() => setIsAsking(false));
+      try {
+        const response = await fetch("/api/grounded-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: cleanPrompt, topic: learner.topics[0]?.topic }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Grounded search failed");
+        const answer = result.answer || "No synthesis available.";
+        setAssistantReply(answer);
+        setChatTurns((prev) =>
+          prev.map((t) =>
+            t.id === aiTurnId
+              ? {
+                  ...t,
+                  content: answer,
+                  streaming: false,
+                  groundedCitations: result.citations || [],
+                  searchQueries: result.searchQueries || [],
+                  agentsUsed: ["google-search-grounding", "gemini-3.8-flash"],
+                  confidence: 0.96,
+                }
+              : t
+          )
+        );
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Grounded search failed";
+        setAssistantReply(`Google Search Grounding error: ${msg}`);
+        setChatTurns((prev) =>
+          prev.map((t) =>
+            t.id === aiTurnId ? { ...t, content: `Google Search Grounding error: ${msg}`, streaming: false } : t
+          )
+        );
+      } finally {
+        setIsAsking(false);
+      }
       return;
     }
 
-    void fetch("/api/assistant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: promptText, learner }),
-    })
-      .then(async (response) => {
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok)
-          throw new Error(result.error ?? `Assistant request failed with HTTP ${response.status}`);
-        return result as {
-          answer?: string;
-          agentsUsed?: string[];
-          confidence?: number;
-          provider?: string;
-          providerMessage?: string;
-        };
-      })
-      .then((result) => {
-        setAssistantReply(result.answer ?? "Your request was processed by CampusGenie.");
-        setAgentTrace(result.agentsUsed ?? []);
-        setAssistantConfidence(result.confidence ?? null);
-        if (result.providerMessage)
-          setAssistantReply((current) => `${current}\n\n${result.providerMessage}`);
-      })
-      .catch((error: Error) =>
-        setAssistantReply(`CampusGenie could not complete the request: ${error.message}`)
-      )
-      .finally(() => setIsAsking(false));
+    try {
+      const response = await fetch("/api/assistant/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: cleanPrompt,
+          history: priorHistory,
+          learner,
+          notes: useNotesInRag ? studyNotes : [],
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || `Assistant stream failed with HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+      let turnSources: RetrievedSource[] = [];
+      let turnAgents: string[] = [];
+      let turnConfidence: number | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() || "";
+
+        for (const frame of frames) {
+          const lines = frame.split("\n");
+          let eventType = "message";
+          let dataRaw = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            if (line.startsWith("data:")) dataRaw += line.slice(5).trim();
+          }
+          if (!dataRaw) continue;
+          const payload = JSON.parse(dataRaw);
+          if (eventType === "meta") {
+            turnSources = payload.sources || [];
+            turnAgents = payload.agentsUsed || [];
+            turnConfidence = payload.confidence ?? null;
+          } else if (eventType === "token" && payload.delta) {
+            accumulated += payload.delta;
+            setAssistantReply(accumulated);
+            setChatTurns((prev) =>
+              prev.map((t) =>
+                t.id === aiTurnId
+                  ? {
+                      ...t,
+                      content: accumulated,
+                      sources: turnSources,
+                      agentsUsed: turnAgents,
+                      confidence: turnConfidence,
+                    }
+                  : t
+              )
+            );
+          } else if (eventType === "error") {
+            throw new Error(payload.error || "Streaming interrupted");
+          }
+        }
+      }
+
+      setChatTurns((prev) =>
+        prev.map((t) =>
+          t.id === aiTurnId
+            ? {
+                ...t,
+                content: accumulated || "Your request was processed by CampusGenie.",
+                streaming: false,
+                sources: turnSources,
+                agentsUsed: turnAgents,
+                confidence: turnConfidence,
+              }
+            : t
+        )
+      );
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      setAssistantReply(`CampusGenie could not complete the request: ${msg}`);
+      setChatTurns((prev) =>
+        prev.map((t) =>
+          t.id === aiTurnId
+            ? { ...t, content: `CampusGenie could not complete the request: ${msg}`, streaming: false }
+            : t
+        )
+      );
+    } finally {
+      setIsAsking(false);
+    }
   }
 
   function submitPrompt(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    executePrompt(message);
-    setMessage("");
+    void executePrompt(message);
   }
 
   // Calculate overall term progress
@@ -730,10 +965,34 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-stone-500 flex items-center gap-1.5 font-medium">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      Gemini 3.8 Flash
+                      {useSearchGrounding ? "Gemini 3.8 Search" : "Gemini 4 Streaming"}
                     </span>
+                    {chatTurns.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChatTurns([]);
+                          setAssistantReply("");
+                          setSent(false);
+                        }}
+                        className="text-[10px] font-mono text-stone-500 hover:text-slate-900 flex items-center gap-1 px-2 py-0.5 rounded-md border border-stone-200 bg-white transition"
+                      >
+                        <RotateCcw size={10} /> Clear
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* PDF / Markdown Lecture Notes RAG Upload & Library */}
+                <NotesRagPanel
+                  notes={studyNotes}
+                  useNotesInRag={useNotesInRag}
+                  onToggleUseNotes={setUseNotesInRag}
+                  onNoteAdded={handleNoteAdded}
+                  onNoteDeleted={handleNoteDeleted}
+                  onAskAboutNote={(prompt) => void executePrompt(prompt)}
+                  isSignedIn={Boolean(verifiedUid)}
+                />
 
                 {/* Mode Selection Controls */}
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -761,6 +1020,106 @@ export default function Home() {
                   </button>
                 </div>
 
+                {/* Multi-Turn Streaming Conversation Thread */}
+                {chatTurns.length > 0 && (
+                  <div className="mb-3 max-h-[420px] overflow-y-auto space-y-3 rounded-2xl border border-stone-200/90 bg-white/75 backdrop-blur-md p-4 shadow-xs">
+                    {chatTurns.map((turn) =>
+                      turn.role === "user" ? (
+                        <div key={turn.id} className="flex justify-end">
+                          <div className="max-w-[85%] rounded-2xl rounded-tr-xs bg-slate-900 text-white px-4 py-2.5 text-xs leading-relaxed shadow-xs">
+                            {turn.content}
+                          </div>
+                        </div>
+                      ) : (
+                        <motion.div
+                          key={turn.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="rounded-2xl rounded-tl-xs bg-white p-4 text-sm leading-relaxed border border-teal-500/25 shadow-2xs"
+                        >
+                          <div className="prose prose-stone prose-sm max-w-none text-slate-800">
+                            {turn.content ? (
+                              <Markdown>{turn.content}</Markdown>
+                            ) : (
+                              <span className="text-xs text-[var(--cobalt)] animate-pulse">
+                                Synthesizing streamed response...
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Cited Uploaded Notes & Curriculum Evidence */}
+                          {turn.sources && turn.sources.length > 0 && !turn.streaming && (
+                            <div className="mt-3 border-t border-stone-100 pt-2.5 flex flex-wrap items-center gap-1.5">
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400 font-semibold flex items-center gap-1">
+                                <FileText size={11} className="text-[var(--cobalt)]" />
+                                RAG Citations:
+                              </span>
+                              {turn.sources.slice(0, 4).map((src) => (
+                                <span
+                                  key={src.id}
+                                  title={src.excerpt}
+                                  className={`px-2 py-0.5 rounded-md font-mono text-[10px] border ${
+                                    src.kind === "note"
+                                      ? "bg-teal-50 text-teal-900 border-teal-200"
+                                      : "bg-stone-50 text-stone-700 border-stone-200"
+                                  }`}
+                                >
+                                  {src.kind === "note" ? "PDF Note: " : ""}
+                                  {src.title.slice(0, 38)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Grounded Search Citations */}
+                          {turn.groundedCitations && turn.groundedCitations.length > 0 && (
+                            <div className="mt-3 border-t border-stone-100 pt-2.5 space-y-1.5">
+                              <div className="text-[10px] font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1">
+                                <Globe size={11} className="text-teal-600" />
+                                Live Grounded Citations ({turn.groundedCitations.length})
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {turn.groundedCitations.map((citation, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={citation.uri}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2 py-0.5 bg-stone-50 hover:bg-teal-50 border border-stone-200 rounded-md text-[10px] text-teal-800 flex items-center gap-1 transition"
+                                  >
+                                    <span className="truncate max-w-[200px] font-medium">{citation.title}</span>
+                                    <ExternalLink size={9} />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Trace & Next Actions on completed assistant turn */}
+                          {!turn.streaming && turn.agentsUsed && turn.agentsUsed.length > 0 && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-2.5">
+                              {turn.agentsUsed.map((agent) => (
+                                <span
+                                  key={agent}
+                                  className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-[10px] text-slate-700 border border-stone-200"
+                                >
+                                  {agent}
+                                </span>
+                              ))}
+                              {turn.confidence != null && (
+                                <span className="ml-auto font-mono text-[10px] text-stone-400">
+                                  confidence {Math.round(turn.confidence * 100)}%
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </motion.div>
+                      )
+                    )}
+                  </div>
+                )}
+
                 {/* Studio Prompt Card */}
                 <form
                   onSubmit={submitPrompt}
@@ -772,13 +1131,17 @@ export default function Home() {
                     placeholder={
                       useSearchGrounding
                         ? "Search recent academic research, syllabus updates, or peer-reviewed literature..."
+                        : chatTurns.length > 0
+                        ? "Ask a follow-up question in this conversation or query your uploaded notes..."
                         : "e.g. Show me why the prior matters in this Bayesian inference problem..."
                     }
-                    className="h-32 w-full resize-none rounded-2xl bg-transparent p-4 sm:p-5 text-sm leading-6 outline-none transition placeholder:text-stone-400"
+                    className="h-28 w-full resize-none rounded-2xl bg-transparent p-4 sm:p-5 text-sm leading-6 outline-none transition placeholder:text-stone-400"
                   />
                   <div className="flex items-center justify-between border-t border-stone-100 px-4 py-2.5">
                     <span className="font-mono text-[10px] text-stone-400 hidden sm:inline">
-                      Curriculum Evidence Grounded
+                      {studyNotes.length > 0 && useNotesInRag
+                        ? `Grounded in ${studyNotes.length} Uploaded Note(s) + Curriculum Evidence`
+                        : "Curriculum Evidence Grounded · Multi-Turn Memory"}
                     </span>
                     <button
                       aria-label="Send question"
@@ -804,7 +1167,7 @@ export default function Home() {
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => executePrompt(sug.prompt)}
+                      onClick={() => void executePrompt(sug.prompt)}
                       className="group flex items-center gap-1 text-[11px] font-medium text-stone-600 hover:text-teal-800 bg-white/70 hover:bg-teal-50/80 border border-stone-200/80 hover:border-teal-300 rounded-lg px-2.5 py-1 transition-all duration-150 shadow-2xs"
                     >
                       <span>{sug.label}</span>
@@ -813,111 +1176,26 @@ export default function Home() {
                   ))}
                 </div>
 
-                {isAsking && (
-                  <div className="mt-3 text-xs text-[var(--cobalt)] animate-pulse flex items-center gap-2 font-medium">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--cobalt)] animate-ping" />
-                    <span>
-                      {useSearchGrounding
-                        ? "Grounding query against live Google Search results with gemini-3.8-flash..."
-                        : "CampusGenie is mapping your question to curriculum evidence with Gemini..."}
+                {sent && !isAsking && assistantReply && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                      <Check size={14} /> Streamed via {useSearchGrounding ? "grounded search pipeline" : "multi-turn RAG pipeline"}.
                     </span>
-                  </div>
-                )}
-
-                {sent && !isAsking && (
-                  <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700 font-medium">
-                    <Check size={14} /> Processed through {useSearchGrounding ? "grounded search pipeline" : "curriculum agent pipeline"}.
-                  </div>
-                )}
-
-                {/* Assistant Output Container */}
-                {/* Assistant Output Container */}
-                {assistantReply && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 12, scale: 0.99 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.25 }}
-                    className="mt-4 whitespace-pre-line rounded-2xl bg-white/95 backdrop-blur-md p-5 sm:p-6 text-sm leading-relaxed border border-teal-500/30 shadow-[0_4px_25px_-5px_rgba(20,184,166,0.15)] transition-all"
-                  >
-                    <div className="prose prose-stone max-w-none text-slate-800 text-[13px] sm:text-sm">
-                      {assistantReply}
-                    </div>
-
-                    {/* Grounded Web Citations */}
-                    {groundedCitations.length > 0 && (
-                      <div className="mt-4 border-t border-stone-100 pt-3.5 space-y-2">
-                        <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                          <Globe size={13} className="text-teal-600" />
-                          Live Grounded Citations ({groundedCitations.length})
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {groundedCitations.map((citation, idx) => (
-                            <a
-                              key={idx}
-                              href={citation.uri}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-2.5 py-1 bg-stone-50 hover:bg-teal-50 border border-stone-200 hover:border-teal-300 rounded-lg text-[11px] text-teal-800 flex items-center gap-1 transition"
-                            >
-                              <span className="truncate max-w-[220px] font-medium">{citation.title}</span>
-                              <ExternalLink size={10} className="shrink-0 text-stone-400" />
-                            </a>
-                          ))}
-                        </div>
-                        {searchQueries.length > 0 && (
-                          <div className="text-[10px] text-stone-400 font-mono pt-1">
-                            Grounding queries: {searchQueries.join(", ")}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {agentTrace.length > 0 && (
-                      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-3">
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-stone-400 font-medium">
-                          Agent Trace
-                        </span>
-                        {agentTrace.map((agent) => (
-                          <span
-                            key={agent}
-                            className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-[10px] text-slate-700 border border-stone-200"
-                          >
-                            {agent}
-                          </span>
-                        ))}
-                        {assistantConfidence !== null && (
-                          <span className="ml-auto font-mono text-[10px] text-stone-400">
-                            confidence {Math.round(assistantConfidence * 100)}%
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Interactive Follow-Up Recommendations */}
-                    <div className="mt-4 border-t border-stone-100 pt-3 flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] font-mono text-teal-700 font-semibold flex items-center gap-1">
-                        <Sparkles size={11} /> Next Actions:
-                      </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <button
-                        onClick={() => executePrompt(`Give me 2 practice test questions to verify if I truly understood this: ${assistantReply.slice(0, 100)}`)}
-                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-stone-50 hover:bg-teal-50 border border-stone-200 px-2.5 py-1 rounded-lg transition"
+                        onClick={() => void executePrompt(`Give me 2 practice test questions to verify if I understood this: ${assistantReply.slice(0, 120)}`)}
+                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-white border border-stone-200 px-2.5 py-1 rounded-lg transition"
                       >
                         Quiz Me on This
                       </button>
                       <button
                         onClick={() => selectNavigation("Study Studio")}
-                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-stone-50 hover:bg-teal-50 border border-stone-200 px-2.5 py-1 rounded-lg transition"
+                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-white border border-stone-200 px-2.5 py-1 rounded-lg transition"
                       >
-                        Add to Study Blueprint
-                      </button>
-                      <button
-                        onClick={() => setVoiceModalOpen(true)}
-                        className="text-[11px] font-semibold text-slate-700 hover:text-teal-800 bg-stone-50 hover:bg-teal-50 border border-stone-200 px-2.5 py-1 rounded-lg transition"
-                      >
-                        Discuss in Voice Tutor
+                        Study Blueprint
                       </button>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
               </div>
 
@@ -1054,6 +1332,7 @@ export default function Home() {
             onMisconceptionResolved={handleMisconceptionResolved}
             onActivityLog={handleLogActivity}
             currentLearner={learner}
+            user={user}
           />
         </div>
       </section>
@@ -1411,6 +1690,7 @@ export default function Home() {
           setVoiceModalOpen(true);
         }}
         onOpenChatRoom={(room) => setActivePeerChatRoom(room)}
+        user={user}
       />
 
       {/* 9. Live Peer Study Chat Room Modal */}
@@ -1421,6 +1701,10 @@ export default function Home() {
         onOpenVoiceTutor={() => {
           setVoiceModalOpen(true);
         }}
+        user={user}
+        onSignIn={handleGoogleSignIn}
+        notes={studyNotes}
+        onSaveSummaryNote={handleSaveSummaryNote}
       />
     </main>
   );

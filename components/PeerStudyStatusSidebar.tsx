@@ -18,8 +18,16 @@ import {
   ShieldCheck,
   Search,
   MessageSquare,
+  Plus,
+  Database,
 } from "lucide-react";
+import type { User } from "firebase/auth";
 import type { PeerChatRoomData } from "./PeerStudyChatRoomModal";
+import {
+  createCustomPeerRoom,
+  subscribeToPeerRooms,
+  type FirestorePeerRoom,
+} from "@/lib/firebase";
 
 export type PeerStatus = "available" | "focus" | "voice" | "seeking" | "break";
 
@@ -56,6 +64,7 @@ interface PeerStudyStatusSidebarProps {
   onSelectPrompt: (prompt: string) => void;
   onOpenVoiceTutor?: (topicName: string) => void;
   onOpenChatRoom?: (room: PeerChatRoomData) => void;
+  user?: User | null;
 }
 
 // Mock Peer Data Indexed by Workspace
@@ -612,6 +621,7 @@ export function PeerStudyStatusSidebar({
   onSelectPrompt,
   onOpenVoiceTutor,
   onOpenChatRoom,
+  user,
 }: PeerStudyStatusSidebarProps) {
   // Map navigation labels to workspace keys
   const resolvedWorkspaceKey = useMemo(() => {
@@ -632,6 +642,59 @@ export function PeerStudyStatusSidebar({
     () => STUDY_PODS[resolvedWorkspaceKey] || [],
     [resolvedWorkspaceKey]
   );
+
+  // Live Firestore peer rooms
+  const [liveRooms, setLiveRooms] = useState<FirestorePeerRoom[]>([]);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [newRoomTitle, setNewRoomTitle] = useState("");
+  const [newRoomTopic, setNewRoomTopic] = useState("");
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+
+  const isLiveVerified = Boolean(user?.uid && user.emailVerified);
+
+  useEffect(() => {
+    if (!isOpen || !isLiveVerified) return;
+    const unsub = subscribeToPeerRooms((rooms) => {
+      setLiveRooms(rooms);
+    });
+    return () => unsub();
+  }, [isOpen, isLiveVerified]);
+
+  async function handleCreateCustomRoom(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user?.uid || !newRoomTitle.trim() || !newRoomTopic.trim()) return;
+    setIsCreatingRoom(true);
+    try {
+      const created = await createCustomPeerRoom(user.uid, {
+        title: newRoomTitle.trim(),
+        workspace: resolvedWorkspaceKey,
+        topic: newRoomTopic.trim(),
+      });
+      setNewRoomTitle("");
+      setNewRoomTopic("");
+      setShowCreateRoom(false);
+      onOpenChatRoom?.({
+        id: created.roomId,
+        title: created.title,
+        workspace: created.workspace,
+        topic: created.topic,
+        peers: [],
+        initialMessages: [
+          {
+            id: `welcome-${created.roomId}`,
+            sender: "ai",
+            senderName: "CampusGenie AI",
+            content: `Live Firestore room **${created.title}** initialized for **${created.topic}**. Share this room with classmates or mention \`@CampusGenie\` anytime.`,
+            timestamp: "Just now",
+            badge: "AI Co-Pilot",
+          },
+        ],
+      });
+      onClose();
+    } finally {
+      setIsCreatingRoom(false);
+    }
+  }
 
   // User's own broadcasting study status
   const [myStatus, setMyStatus] = useState<PeerStatus>("available");
@@ -863,6 +926,108 @@ export function PeerStudyStatusSidebar({
                     Visible to cohort
                   </span>
                 </div>
+              </div>
+
+              {/* Live Firestore Rooms + Create Room */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5 uppercase tracking-wide text-[11px]">
+                    <Database size={12} className="text-emerald-600" />
+                    Live Firestore Rooms ({liveRooms.length})
+                  </span>
+                  {isLiveVerified && (
+                    <button
+                      onClick={() => setShowCreateRoom((p) => !p)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[10px] font-semibold hover:bg-[var(--cobalt)] transition"
+                    >
+                      <Plus size={11} />
+                      <span>New Live Room</span>
+                    </button>
+                  )}
+                </div>
+
+                {showCreateRoom && isLiveVerified && (
+                  <form
+                    onSubmit={handleCreateCustomRoom}
+                    className="rounded-2xl border border-teal-200 bg-teal-50/50 p-3 space-y-2 text-xs"
+                  >
+                    <input
+                      type="text"
+                      required
+                      value={newRoomTitle}
+                      onChange={(e) => setNewRoomTitle(e.target.value)}
+                      placeholder="Room title (e.g. Bayes MST-2 Sprint)"
+                      className="w-full rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-teal-600"
+                    />
+                    <input
+                      type="text"
+                      required
+                      value={newRoomTopic}
+                      onChange={(e) => setNewRoomTopic(e.target.value)}
+                      placeholder="Topic focus (e.g. Base-rate neglect & posteriors)"
+                      className="w-full rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-teal-600"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateRoom(false)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] text-stone-600 hover:bg-stone-200/60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isCreatingRoom}
+                        className="px-3 py-1 rounded-lg bg-teal-700 text-white text-[11px] font-semibold disabled:opacity-50"
+                      >
+                        {isCreatingRoom ? "Creating..." : "Launch Live Room"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {liveRooms.length > 0 && (
+                  <div className="space-y-2">
+                    {liveRooms.slice(0, 4).map((room) => (
+                      <div
+                        key={room.roomId}
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 text-xs truncate">{room.title}</p>
+                          <p className="text-[10px] text-stone-600 truncate">
+                            {room.workspace} · {room.topic}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            onOpenChatRoom?.({
+                              id: room.roomId,
+                              title: room.title,
+                              workspace: room.workspace,
+                              topic: room.topic,
+                              peers: [],
+                              initialMessages: [
+                                {
+                                  id: `seed-${room.roomId}`,
+                                  sender: "ai",
+                                  senderName: "CampusGenie AI",
+                                  content: `Connected to live Firestore room **${room.title}** (${room.topic}). Mention \`@CampusGenie\` anytime for a streamed breakdown.`,
+                                  timestamp: "Live",
+                                  badge: "AI Co-Pilot",
+                                },
+                              ],
+                            });
+                            onClose();
+                          }}
+                          className="shrink-0 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-[var(--cobalt)] text-white text-[11px] font-semibold transition"
+                        >
+                          Join
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Active Study Pods in this Workspace */}

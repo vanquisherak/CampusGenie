@@ -32,7 +32,7 @@ export async function runAgenticAssistant(message: string, learner: LearningStat
 
 async function generateWithConfiguredModel(message: string, learner: LearningState, intent: string, evidence: typeof demoEvidence): Promise<{ answer: string | null; message?: string }> {
   const geminiKey = process.env.GEMINI_API_KEY;
-  const geminiModel = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  const geminiModel = process.env.GEMINI_MODEL || "gemini-4-hydrogen";
   if (geminiKey) return generateWithGemini(geminiKey, geminiModel, message, learner, intent, evidence);
 
   const apiKey = process.env.AI_API_KEY;
@@ -86,7 +86,7 @@ async function generateWithGemini(apiKey: string, primaryModel: string, message:
       },
     });
 
-    const modelsToTry = Array.from(new Set([primaryModel, "gemini-3.1-flash-lite", "gemini-3.8-flash"]));
+    const modelsToTry = Array.from(new Set([primaryModel, "gemini-4-hydrogen", "gemini-3.1-flash-lite"]));
     let lastError: string | null = null;
 
     for (const model of modelsToTry) {

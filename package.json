@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "next build",
+    "dev": "next dev --turbopack -p 3000 -H 0.0.0.0",
+    "build": "NODE_ENV=production next build && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static",
     "start": "node server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
@@ -17,7 +17,8 @@
     "motion": "^14.8.0",
     "next": "^15.5.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

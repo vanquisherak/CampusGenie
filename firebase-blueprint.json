@@ -14,6 +14,33 @@
       },
       "required": ["email", "displayName", "createdAt"]
     },
+    "LearnerProgress": {
+      "title": "LearnerProgress",
+      "description": "Persisted learner curriculum topic masteries and resolved misconceptions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "topics": { "type": "array", "description": "Topic mastery snapshot items (max 30)" },
+        "resolvedMisconceptions": { "type": "array", "description": "List of resolved misconception IDs (max 30)" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "topics", "updatedAt"]
+    },
+    "ActivityEntry": {
+      "title": "ActivityEntry",
+      "description": "Timestamped learner activity receipt entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 160 },
+        "meta": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "maxLength": 80 },
+        "color": { "type": "string", "maxLength": 60 },
+        "details": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "meta", "status", "color", "createdAt"]
+    },
     "DiagnosticResult": {
       "title": "DiagnosticResult",
       "description": "Adaptive quiz lab diagnostic result with question scores and misconception log",
@@ -31,15 +58,21 @@
     },
     "StudyBlock": {
       "title": "StudyBlock",
-      "description": "Personalized study timetable blocks and pomodoro completion state",
+      "description": "Personalized study timetable blocks and blueprint step progress",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "maxLength": 128 },
         "title": { "type": "string", "maxLength": 150 },
+        "course": { "type": "string", "maxLength": 100 },
         "durationMin": { "type": "number" },
         "completed": { "type": "boolean" },
+        "status": { "type": "string", "maxLength": 40 },
         "notes": { "type": "string", "maxLength": 500 },
-        "scheduledFor": { "type": "string", "format": "date-time" }
+        "blueprintGoal": { "type": "string", "maxLength": 400 },
+        "microStepsCount": { "type": "number" },
+        "completedStepsCount": { "type": "number" },
+        "scheduledFor": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "title", "durationMin", "completed", "scheduledFor"]
     },
@@ -55,6 +88,67 @@
         "savedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "projectId", "title", "tier", "savedAt"]
+    },
+    "StudyNote": {
+      "title": "StudyNote",
+      "description": "Uploaded PDF or Markdown lecture notes indexed into semantic chunks for RAG",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 160 },
+        "fileName": { "type": "string", "maxLength": 160 },
+        "course": { "type": "string", "maxLength": 100 },
+        "chunkCount": { "type": "number" },
+        "chunks": { "type": "array", "description": "Extracted RAG note chunks (max 25 chunks)" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "fileName", "course", "chunkCount", "chunks", "createdAt"]
+    },
+    "PeerRoom": {
+      "title": "PeerRoom",
+      "description": "Live collaborative peer study room shared across authenticated learners",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "workspace": { "type": "string", "maxLength": 80 },
+        "topic": { "type": "string", "maxLength": 200 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "title", "workspace", "topic", "createdBy", "createdAt"]
+    },
+    "PeerRoomMessage": {
+      "title": "PeerRoomMessage",
+      "description": "Real-time message inside a live peer study room",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "maxLength": 128 },
+        "sender": { "type": "string", "enum": ["user", "ai"] },
+        "senderUid": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderInitials": { "type": "string", "maxLength": 8 },
+        "avatarBg": { "type": "string", "maxLength": 40 },
+        "content": { "type": "string", "maxLength": 4000 },
+        "badge": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "sender", "senderUid", "senderName", "content", "createdAt"]
+    },
+    "PeerRoomPresence": {
+      "title": "PeerRoomPresence",
+      "description": "Active learner presence marker inside a peer study room",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "initials": { "type": "string", "maxLength": 8 },
+        "status": { "type": "string", "maxLength": 40 },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "userId", "displayName", "initials", "status", "lastSeen"]
     }
   },
   "firestore": {
@@ -62,17 +156,41 @@
       "schema": "UserProfile",
       "description": "User profile with academic track preferences"
     },
+    "/users/{userId}/learnerState/{stateId}": {
+      "schema": "LearnerProgress",
+      "description": "Synced learner curriculum mastery and resolved misconceptions"
+    },
+    "/users/{userId}/activities/{activityId}": {
+      "schema": "ActivityEntry",
+      "description": "User learning activity and session receipts"
+    },
     "/users/{userId}/diagnostics/{diagnosticId}": {
       "schema": "DiagnosticResult",
       "description": "User diagnostic quiz attempts and misconception remediation"
     },
     "/users/{userId}/studyBlocks/{blockId}": {
       "schema": "StudyBlock",
-      "description": "User timetable study blocks and pomodoro status"
+      "description": "User timetable study blocks and blueprint step state"
     },
     "/users/{userId}/projectBookmarks/{bookmarkId}": {
       "schema": "ProjectBookmark",
       "description": "User saved and short-listed portfolio project blueprints"
+    },
+    "/users/{userId}/studyNotes/{noteId}": {
+      "schema": "StudyNote",
+      "description": "User uploaded PDF/text lecture notes indexed for RAG"
+    },
+    "/peerRooms/{roomId}": {
+      "schema": "PeerRoom",
+      "description": "Shared collaborative study rooms for classmates and CampusGenie"
+    },
+    "/peerRooms/{roomId}/messages/{messageId}": {
+      "schema": "PeerRoomMessage",
+      "description": "Live chat messages and AI co-pilot replies in a study room"
+    },
+    "/peerRooms/{roomId}/presence/{memberId}": {
+      "schema": "PeerRoomPresence",
+      "description": "Live active peers inside a study room"
     }
   }
 }

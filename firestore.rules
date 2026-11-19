@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net (Pillar 1/Phase 4)
+    // Global Safety Net (Default Deny)
     match /{document=**} {
       allow read, write: if false;
     }
@@ -11,8 +11,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isVerifiedUser() && request.auth.uid == userId;
     }
 
     function incoming() {
@@ -27,6 +31,10 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function peerRoomExists(roomId) {
+      return exists(/databases/$(database)/documents/peerRooms/$(roomId));
+    }
+
     function isValidUserProfile(data) {
       return data.keys().hasAll(['email', 'displayName', 'createdAt']) &&
         data.keys().hasOnly(['email', 'displayName', 'photoURL', 'targetTrack', 'createdAt', 'updatedAt']) &&
@@ -36,6 +44,27 @@ service cloud.firestore {
         (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
         (!('targetTrack' in data) || (data.targetTrack is string && data.targetTrack.size() <= 100)) &&
         (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 60));
+    }
+
+    function isValidLearnerProgress(data, userId) {
+      return data.keys().hasAll(['userId', 'topics', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'topics', 'resolvedMisconceptions', 'updatedAt']) &&
+        data.userId == userId &&
+        data.topics is list && data.topics.size() <= 30 &&
+        data.updatedAt is string && data.updatedAt.size() <= 60 &&
+        (!('resolvedMisconceptions' in data) || (data.resolvedMisconceptions is list && data.resolvedMisconceptions.size() <= 30));
+    }
+
+    function isValidActivityEntry(data, userId) {
+      return data.keys().hasAll(['userId', 'title', 'meta', 'status', 'color', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'title', 'meta', 'status', 'color', 'details', 'createdAt']) &&
+        data.userId == userId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 160 &&
+        data.meta is string && data.meta.size() <= 80 &&
+        data.status is string && data.status.size() <= 80 &&
+        data.color is string && data.color.size() <= 60 &&
+        data.createdAt is string && data.createdAt.size() <= 60 &&
+        (!('details' in data) || (data.details is string && data.details.size() <= 500));
     }
 
     function isValidDiagnostic(data, userId) {
@@ -52,13 +81,19 @@ service cloud.firestore {
 
     function isValidStudyBlock(data, userId) {
       return data.keys().hasAll(['userId', 'title', 'durationMin', 'completed', 'scheduledFor']) &&
-        data.keys().hasOnly(['userId', 'title', 'durationMin', 'completed', 'notes', 'scheduledFor']) &&
+        data.keys().hasOnly(['userId', 'title', 'course', 'durationMin', 'completed', 'status', 'notes', 'blueprintGoal', 'microStepsCount', 'completedStepsCount', 'scheduledFor', 'updatedAt']) &&
         data.userId == userId &&
-        data.title is string && data.title.size() <= 150 &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
         data.durationMin is number && data.durationMin > 0 && data.durationMin <= 1440 &&
         data.completed is bool &&
         data.scheduledFor is string && data.scheduledFor.size() <= 60 &&
-        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500));
+        (!('course' in data) || (data.course is string && data.course.size() <= 100)) &&
+        (!('status' in data) || (data.status is string && data.status.size() <= 40)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+        (!('blueprintGoal' in data) || (data.blueprintGoal is string && data.blueprintGoal.size() <= 400)) &&
+        (!('microStepsCount' in data) || (data.microStepsCount is number && data.microStepsCount >= 0 && data.microStepsCount <= 50)) &&
+        (!('completedStepsCount' in data) || (data.completedStepsCount is number && data.completedStepsCount >= 0 && data.completedStepsCount <= 50)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 60));
     }
 
     function isValidProjectBookmark(data, userId) {
@@ -71,6 +106,56 @@ service cloud.firestore {
         data.savedAt is string && data.savedAt.size() <= 60;
     }
 
+    function isValidStudyNote(data, userId) {
+      return data.keys().hasAll(['userId', 'title', 'fileName', 'course', 'chunkCount', 'chunks', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'title', 'fileName', 'course', 'chunkCount', 'chunks', 'createdAt']) &&
+        data.userId == userId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 160 &&
+        data.fileName is string && data.fileName.size() > 0 && data.fileName.size() <= 160 &&
+        data.course is string && data.course.size() <= 100 &&
+        data.chunkCount is number && data.chunkCount >= 0 && data.chunkCount <= 25 &&
+        data.chunks is list && data.chunks.size() <= 25 &&
+        data.createdAt is string && data.createdAt.size() <= 60;
+    }
+
+    function isValidPeerRoom(data) {
+      return data.keys().hasAll(['roomId', 'title', 'workspace', 'topic', 'createdBy', 'createdAt']) &&
+        data.keys().hasOnly(['roomId', 'title', 'workspace', 'topic', 'createdBy', 'createdAt', 'updatedAt']) &&
+        isValidId(data.roomId) &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+        data.workspace is string && data.workspace.size() > 0 && data.workspace.size() <= 80 &&
+        data.topic is string && data.topic.size() > 0 && data.topic.size() <= 200 &&
+        data.createdBy is string && data.createdBy.size() > 0 && data.createdBy.size() <= 128 &&
+        data.createdAt is string && data.createdAt.size() <= 60 &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 60));
+    }
+
+    function isValidPeerRoomMessage(data, roomId) {
+      return data.keys().hasAll(['roomId', 'sender', 'senderUid', 'senderName', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['roomId', 'sender', 'senderUid', 'senderName', 'senderInitials', 'avatarBg', 'content', 'badge', 'createdAt']) &&
+        data.roomId == roomId &&
+        data.sender in ['user', 'ai'] &&
+        data.senderUid == request.auth.uid &&
+        data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 100 &&
+        data.content is string && data.content.size() > 0 && data.content.size() <= 4000 &&
+        data.createdAt is string && data.createdAt.size() <= 60 &&
+        (!('senderInitials' in data) || (data.senderInitials is string && data.senderInitials.size() <= 8)) &&
+        (!('avatarBg' in data) || (data.avatarBg is string && data.avatarBg.size() <= 40)) &&
+        (!('badge' in data) || (data.badge is string && data.badge.size() <= 40));
+    }
+
+    function isValidPeerRoomPresence(data, roomId, memberId) {
+      return data.keys().hasAll(['roomId', 'userId', 'displayName', 'initials', 'status', 'lastSeen']) &&
+        data.keys().hasOnly(['roomId', 'userId', 'displayName', 'initials', 'status', 'lastSeen']) &&
+        data.roomId == roomId &&
+        data.userId == memberId &&
+        data.userId == request.auth.uid &&
+        data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+        data.initials is string && data.initials.size() > 0 && data.initials.size() <= 8 &&
+        data.status is string && data.status.size() > 0 && data.status.size() <= 40 &&
+        data.lastSeen is string && data.lastSeen.size() <= 60;
+    }
+
     // User profile document
     match /users/{userId} {
       allow get: if isOwner(userId) && isValidId(userId);
@@ -79,6 +164,27 @@ service cloud.firestore {
         incoming().email == existing().email &&
         incoming().createdAt == existing().createdAt;
       allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: Learner Mastery & Misconception State
+      match /learnerState/{stateId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(stateId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(stateId) && isValidLearnerProgress(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(stateId) && isValidLearnerProgress(incoming(), userId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(stateId);
+      }
+
+      // Subcollection: Activity Receipts
+      match /activities/{activityId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(activityId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(activityId) && isValidActivityEntry(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(activityId) && isValidActivityEntry(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(activityId);
+      }
 
       // Subcollection: Diagnostics
       match /diagnostics/{diagnosticId} {
@@ -109,6 +215,55 @@ service cloud.firestore {
         allow update: if isOwner(userId) && isValidId(userId) && isValidId(bookmarkId) && isValidProjectBookmark(incoming(), userId) &&
           incoming().userId == existing().userId;
         allow delete: if isOwner(userId) && isValidId(userId) && isValidId(bookmarkId);
+      }
+
+      // Subcollection: Uploaded PDF/Text Study Notes for RAG
+      match /studyNotes/{noteId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(noteId);
+        allow list: if isOwner(userId) && isValidId(userId) && existing().userId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(noteId) && isValidStudyNote(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(noteId) && isValidStudyNote(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(noteId);
+      }
+    }
+
+    // Shared Real-Time Peer Study Rooms (Authenticated & Verified Scholars)
+    match /peerRooms/{roomId} {
+      allow get: if isVerifiedUser() && isValidId(roomId);
+      allow list: if isVerifiedUser();
+      allow create: if isVerifiedUser() && isValidId(roomId) && isValidPeerRoom(incoming()) &&
+        incoming().roomId == roomId &&
+        incoming().createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && isValidId(roomId) && isValidPeerRoom(incoming()) &&
+        existing().createdBy == request.auth.uid &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().roomId == existing().roomId;
+      allow delete: if isVerifiedUser() && isValidId(roomId) && existing().createdBy == request.auth.uid;
+
+      // Room Messages Subcollection
+      match /messages/{messageId} {
+        allow get: if isVerifiedUser() && isValidId(roomId) && isValidId(messageId) && peerRoomExists(roomId);
+        allow list: if isVerifiedUser() && isValidId(roomId);
+        allow create: if isVerifiedUser() && isValidId(roomId) && isValidId(messageId) &&
+          peerRoomExists(roomId) && isValidPeerRoomMessage(incoming(), roomId);
+        allow update: if false;
+        allow delete: if isVerifiedUser() && isValidId(roomId) && isValidId(messageId) && existing().senderUid == request.auth.uid;
+      }
+
+      // Room Presence Subcollection
+      match /presence/{memberId} {
+        allow get: if isVerifiedUser() && isValidId(roomId) && isValidId(memberId) && peerRoomExists(roomId);
+        allow list: if isVerifiedUser() && isValidId(roomId);
+        allow create: if isOwner(memberId) && isValidId(roomId) && isValidId(memberId) &&
+          peerRoomExists(roomId) && isValidPeerRoomPresence(incoming(), roomId, memberId);
+        allow update: if isOwner(memberId) && isValidId(roomId) && isValidId(memberId) &&
+          isValidPeerRoomPresence(incoming(), roomId, memberId) &&
+          incoming().userId == existing().userId &&
+          incoming().roomId == existing().roomId;
+        allow delete: if isOwner(memberId) && isValidId(roomId) && isValidId(memberId);
       }
     }
   }
